@@ -1,0 +1,115 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum HttpMethod {
+  GET
+  POST
+  PUT
+  DELETE
+  PATCH
+  HEAD
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  firstName    String?
+  lastName     String?
+  role         Role     @default(USER)
+  isVerified   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  refreshTokens    RefreshToken[]
+  otpVerifications OtpVerification[]
+  passwordResets   PasswordResetToken[]
+  monitors         Monitor[]
+
+  @@index([email])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isRevoked Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([tokenHash])
+}
+
+model OtpVerification {
+  id        String   @id @default(uuid())
+  codeHash  String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([tokenHash])
+}
+
+model Monitor {
+  id             String     @id @default(uuid())
+  name           String     @db.VarChar(255)
+  url            String     @db.Text
+  method         HttpMethod @default(GET)
+  interval       Int        @default(60)
+  active         Boolean    @default(true)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  organizationId String
+
+  userId  String
+  user    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  results MonitoringResult[]
+
+  @@index([active])
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model MonitoringResult {
+  monitorId    String
+  statusCode   Int?     @db.SmallInt
+  responseTime Int
+  success      Boolean
+  errorMessage String?  @db.Text
+  checkedAt    DateTime @default(now())
+
+  monitor Monitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  @@id([monitorId, checkedAt])
+  @@index([monitorId, checkedAt(sort: Desc)])
+}
