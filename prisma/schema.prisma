@@ -5,6 +5,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  output   = "../src/generated"
 }
 
 datasource db {
@@ -78,38 +79,4 @@ model PasswordResetToken {
 
   @@index([userId])
   @@index([tokenHash])
-}
-
-model Monitor {
-  id             String     @id @default(uuid())
-  name           String     @db.VarChar(255)
-  url            String     @db.Text
-  method         HttpMethod @default(GET)
-  interval       Int        @default(60)
-  active         Boolean    @default(true)
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
-  organizationId String
-
-  userId  String
-  user    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  results MonitoringResult[]
-
-  @@index([active])
-  @@index([userId])
-  @@index([organizationId])
-}
-
-model MonitoringResult {
-  monitorId    String
-  statusCode   Int?     @db.SmallInt
-  responseTime Int
-  success      Boolean
-  errorMessage String?  @db.Text
-  checkedAt    DateTime @default(now())
-
-  monitor Monitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
-
-  @@id([monitorId, checkedAt])
-  @@index([monitorId, checkedAt(sort: Desc)])
 }
