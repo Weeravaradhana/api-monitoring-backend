@@ -2,8 +2,6 @@ import { z } from 'zod';
 import { $Enums } from '@generated/*';
 import HttpMethod = $Enums.HttpMethod;
 
-
-
 export const createMonitorSchema = z.object({
   name: z.string().min(1).max(255).trim(),
   url: z.string().url('Include valid address pattern'),
