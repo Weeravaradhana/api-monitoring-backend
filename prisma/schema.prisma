@@ -26,6 +26,12 @@ enum Role {
   ADMIN
 }
 
+enum MonitorStatus {
+  ACTIVE
+  PAUSED
+  DELETED
+}
+
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
@@ -79,4 +85,40 @@ model PasswordResetToken {
 
   @@index([userId])
   @@index([tokenHash])
+}
+
+model Monitor {
+  id        String        @id @default(uuid())
+  name      String        @db.VarChar(255)
+  url       String        @db.Text
+  method    HttpMethod    @default(GET)
+  interval  Int           @default(60)
+  timeout   Int           @default(30)
+  headers   Json          @default("{}")
+  body      String?       @db.Text
+  status    MonitorStatus @default(ACTIVE)
+  nextRunAt DateTime      @default(now())
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  userId  String
+  user    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  results MonitoringResult[]
+
+  @@index([userId])
+  @@index([status, nextRunAt])
+}
+
+model MonitoringResult {
+  monitorId    String
+  statusCode   Int?     @db.SmallInt
+  responseTime Int
+  success      Boolean
+  errorMessage String?  @db.Text
+  checkedAt    DateTime @default(now())
+
+  monitor Monitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  @@id([monitorId, checkedAt])
+  @@index([monitorId, checkedAt(sort: Desc)])
 }
