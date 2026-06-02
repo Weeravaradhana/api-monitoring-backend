@@ -1,0 +1,76 @@
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { CreateMonitorDto, UpdateMonitorDto } from './dto/create-monitor.dto';
+import { MonitorRepository } from './monitor.repository';
+
+@Injectable()
+export class MonitorService {
+  constructor(private readonly monitorRepo: MonitorRepository) {}
+
+  create(dto: CreateMonitorDto, userId: string) {
+    this.validatorUrlSecurity(dto.url);
+
+    const nextRunTime = new Date();
+    nextRunTime.setSeconds(nextRunTime.getSeconds() + dto.interval);
+
+    return this.monitorRepo.create(userId, dto, nextRunTime);
+  }
+
+  async findManyByUserId(userId: string, page: number, limit: number) {
+    return await this.monitorRepo.findManyByUserId(userId, page, limit);
+  }
+
+  async findOneById(id: string, userId: string) {
+    const monitor = await this.monitorRepo.findOneById(id, userId);
+
+    if (!monitor) {
+      throw new NotFoundException(
+        'The monitor could not be found, or you do not have permission to do so.',
+      );
+    }
+
+    return monitor;
+  }
+
+  async update(id: string, userId: string, dto: UpdateMonitorDto) {
+    this.validatorUrlSecurity(dto.url!);
+    const result = await this.monitorRepo.update(id, userId, dto);
+
+    if (result.count === 0) {
+      throw new NotFoundException(
+        'Monitor could not be found or update is not allowed.',
+      );
+    }
+    return { success: true, message: 'Monitor update successfully' };
+  }
+
+  async softDelete(id: string, userId: string) {
+    const result = await this.monitorRepo.softDelete(id, userId);
+
+    if (result.count === 0) {
+      throw new NotFoundException(
+        'Monitor could not be found or delete is not allowed.',
+      );
+    }
+    return { success: true, message: 'Monitor soft-delete successfully' };
+  }
+
+  private validatorUrlSecurity(urlString: string) {
+    const url = new URL(urlString);
+    const hostname = url.hostname;
+
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname.startsWith('192.168.') ||
+      hostname.startsWith('10.')
+    ) {
+      throw new BadRequestException(
+        'Internal URL cannot be monitored for security reasons.',
+      );
+    }
+  }
+}
