@@ -1,38 +1,20 @@
-import {
-  IsEnum,
-  IsInt,
-  IsNotEmpty,
-  IsOptional,
-  IsPositive,
-  IsString,
-  IsUrl,
-  IsUUID,
-  Min,
-} from 'class-validator';
-import { HttpMethods } from '../enums/http-methods.enum';
-import { Type } from 'class-transformer';
+import { z } from 'zod';
+import { $Enums } from '@generated/*';
+import HttpMethod = $Enums.HttpMethod;
 
-export class CreateMonitorDto {
-  @IsString()
-  @IsNotEmpty()
-  name: string;
 
-  @IsString()
-  @IsNotEmpty()
-  @IsUrl()
-  url: string;
 
-  @IsEnum(HttpMethods)
-  @IsNotEmpty()
-  method: HttpMethods;
+export const createMonitorSchema = z.object({
+  name: z.string().min(1).max(255).trim(),
+  url: z.string().url('Include valid address pattern'),
+  method: z.nativeEnum(HttpMethod).default(HttpMethod.GET),
+  interval: z.number().int().min(10, 'At least include 10s').default(60),
+  timeout: z.number().int().min(1).max(60).default(30),
+  headers: z.record(z.string(), z.string()).default({}),
+  body: z.string().optional(),
+});
 
-  @IsInt()
-  @IsPositive()
-  @Min(60)
-  @Type(() => Number)
-  interval: number;
+export const UpdateMonitorSchema = createMonitorSchema.partial();
 
-  @IsOptional()
-  @IsUUID()
-  organizationId: string;
-}
+export type CreateMonitorDto = z.infer<typeof createMonitorSchema>;
+export type UpdateMonitorDto = z.infer<typeof UpdateMonitorSchema>;
