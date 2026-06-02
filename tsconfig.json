@@ -1,6 +1,13 @@
 {
   "compilerOptions": {
     "module": "nodenext",
+    "paths": {
+      "@generated/*": ["src/generated"]
+    },
+    "include": [
+      "src/**/*",
+      "src/generated/**/*"
+    ],
     "moduleResolution": "nodenext",
     "resolvePackageJsonExports": true,
     "esModuleInterop": true,
