@@ -4,6 +4,9 @@ CREATE TYPE "HttpMethod" AS ENUM ('GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD
 -- CreateEnum
 CREATE TYPE "Role" AS ENUM ('USER', 'ADMIN');
 
+-- CreateEnum
+CREATE TYPE "MonitorStatus" AS ENUM ('ACTIVE', 'PAUSED', 'DELETED');
+
 -- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
@@ -60,10 +63,13 @@ CREATE TABLE "Monitor" (
     "url" TEXT NOT NULL,
     "method" "HttpMethod" NOT NULL DEFAULT 'GET',
     "interval" INTEGER NOT NULL DEFAULT 60,
-    "active" BOOLEAN NOT NULL DEFAULT true,
+    "timeout" INTEGER NOT NULL DEFAULT 30,
+    "headers" JSONB NOT NULL DEFAULT '{}',
+    "body" TEXT,
+    "status" "MonitorStatus" NOT NULL DEFAULT 'ACTIVE',
+    "nextRunAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
-    "organizationId" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
 
     CONSTRAINT "Monitor_pkey" PRIMARY KEY ("id")
@@ -109,13 +115,10 @@ CREATE INDEX "PasswordResetToken_userId_idx" ON "PasswordResetToken"("userId");
 CREATE INDEX "PasswordResetToken_tokenHash_idx" ON "PasswordResetToken"("tokenHash");
 
 -- CreateIndex
-CREATE INDEX "Monitor_active_idx" ON "Monitor"("active");
-
--- CreateIndex
 CREATE INDEX "Monitor_userId_idx" ON "Monitor"("userId");
 
 -- CreateIndex
-CREATE INDEX "Monitor_organizationId_idx" ON "Monitor"("organizationId");
+CREATE INDEX "Monitor_status_nextRunAt_idx" ON "Monitor"("status", "nextRunAt");
 
 -- CreateIndex
 CREATE INDEX "MonitoringResult_monitorId_checkedAt_idx" ON "MonitoringResult"("monitorId", "checkedAt" DESC);
