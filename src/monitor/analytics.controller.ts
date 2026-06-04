@@ -1,11 +1,11 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 
-@Controller('monitor/:id/analytics')
+@Controller('monitor')
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 
-  @Get()
+  @Get(':id/analytics')
   async getAnalytics(
     @Param('id') monitorId: string,
     @Query('range') range: string = '24h',
