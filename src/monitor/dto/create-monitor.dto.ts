@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { $Enums } from '@generated/*';
+import { $Enums } from '@prisma/client';
 import HttpMethod = $Enums.HttpMethod;
 
 export const createMonitorSchema = z.object({

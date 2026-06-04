@@ -17,7 +17,7 @@ import { GetUser } from './decorators/get-user.decorator';
 import express from 'express';
 import * as jwtPayloadInterface from './interface/jwt-payload.interface';
 
-@Controller()
+@Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 

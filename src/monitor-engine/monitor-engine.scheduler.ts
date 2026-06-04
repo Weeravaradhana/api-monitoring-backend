@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MonitorEngineExecutor } from './monitor-engine.executor';
 import { Interval } from '@nestjs/schedule';
-import { MonitorStatus } from '@generated/*';
+import { MonitorStatus } from '@prisma/client';
 
 @Injectable()
 export class MonitorEngineScheduler {

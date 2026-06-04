@@ -95,14 +95,14 @@ export class AuthService {
 
   async generateToken(dto: TokenGenerateDto) {
     const payload = {
-      sub: dto.email,
+      sub: dto.userId,
       email: dto.email,
       role: dto.role,
     };
 
     const accessToken = await this.jwtService.signAsync(payload, {
       secret: process.env.JWT_ACCESS_SECRET!,
-      expiresIn: (process.env.JWT_ACCESS_EXPIRATION as StringValue) || '15ms',
+      expiresIn: (process.env.JWT_ACCESS_EXPIRATION as StringValue) || '15m',
     });
 
     const rawRefreshToken = crypto.randomBytes(40).toString('hex');
@@ -114,9 +114,9 @@ export class AuthService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    await this.prisma.refeshToken.create({
+    await this.prisma.refreshToken.create({
       data: {
-        token: tokenHash,
+        tokenHash,
         userId: dto.userId,
         expiresAt,
       },
@@ -176,8 +176,8 @@ export class AuthService {
       .update(dto.refreshToken)
       .digest('hex');
 
-    const existingToken = await this.prisma.refeshToken.findUnique({
-      where: { token: incomingTokenHash },
+    const existingToken = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash: incomingTokenHash },
     });
 
     if (
@@ -194,7 +194,7 @@ export class AuthService {
       );
     }
 
-    await this.prisma.refeshToken.delete({
+    await this.prisma.refreshToken.delete({
       where: { id: existingToken.id },
     });
 
@@ -228,12 +228,12 @@ export class AuthService {
       .update(refreshToken)
       .digest('hex');
 
-    const existingToken = await this.prisma.refeshToken.findUnique({
-      where: { token: tokenHash },
+    const existingToken = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash },
     });
 
     if (existingToken) {
-      await this.prisma.refeshToken.delete({
+      await this.prisma.refreshToken.delete({
         where: { id: existingToken.id },
       });
     }
@@ -257,7 +257,7 @@ export class AuthService {
   }
 
   async logoutAll(userId: string) {
-    await this.prisma.refeshToken.deleteMany({
+    await this.prisma.refreshToken.deleteMany({
       where: { userId },
     });
 
