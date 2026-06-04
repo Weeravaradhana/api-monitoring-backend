@@ -1,6 +1,6 @@
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMonitorDto, UpdateMonitorDto } from './dto/create-monitor.dto';
-import { MonitorStatus } from '@generated/*';
+import { MonitorStatus } from '@prisma/client';
 import { Injectable } from '@nestjs/common';
 
 @Injectable()
