@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { Monitor } from '@generated/*';
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import { firstValueFrom } from 'rxjs';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Injectable()
 export class MonitorEngineExecutor {
@@ -12,6 +13,7 @@ export class MonitorEngineExecutor {
   constructor(
     private readonly httpService: HttpService,
     private readonly prisma: PrismaService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async executeJob(monitor: Monitor) {
@@ -43,7 +45,15 @@ export class MonitorEngineExecutor {
       const response = await firstValueFrom(this.httpService.request(config));
       statusCode = response.status;
       success = statusCode >= 200 && statusCode < 400;
-      if (!success) errorMessage = `HTTP Error Status: ${statusCode}`;
+      if (!success) {
+        errorMessage = `HTTP Error Status: ${statusCode}`;
+        this.eventEmitter.emit('monitor.down', {
+          monitorId: monitor.id,
+          url: monitor.url,
+          statusCode,
+          errorMessage,
+        });
+      }
     } catch (error: unknown) {
       success = false;
       if (axios.isAxiosError(error)) {
