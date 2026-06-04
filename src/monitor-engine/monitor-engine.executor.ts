@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { PrismaService } from '../prisma/prisma.service';
-import { Monitor } from '@generated/*';
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import { firstValueFrom } from 'rxjs';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { Monitor } from '@prisma/client';
 
 @Injectable()
 export class MonitorEngineExecutor {
