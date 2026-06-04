@@ -26,8 +26,9 @@ export class MonitorController {
   create(
     @Body()
     dto: createMonitorDto.CreateMonitorDto,
-    @GetUser('id') userId: string,
+    @GetUser('sub') userId: string,
   ) {
+    console.log('User id', userId);
     return this.monitorService.create(dto, userId);
   }
 
