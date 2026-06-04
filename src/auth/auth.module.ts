@@ -4,9 +4,10 @@ import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { RedisModule } from '../redis/redis.module';
 
 @Module({
-  imports: [JwtModule.register({})],
+  imports: [JwtModule.register({}), RedisModule],
   controllers: [AuthController],
   providers: [AuthService, PrismaService, JwtStrategy],
 })
