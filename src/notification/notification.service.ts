@@ -28,7 +28,7 @@ export class NotificationService implements OnModuleInit {
   }
 
   async sendFailureAlert(
-    monitorId: string,
+    userEmail: string,
     url: string,
     statusCode: number | null,
     errorMessage: string | null,
@@ -49,10 +49,10 @@ export class NotificationService implements OnModuleInit {
       </div>
     `;
 
-    await this.executeMailDispatch(subject, htmlContent);
+    await this.executeMailDispatch(userEmail, subject, htmlContent);
   }
 
-  async sendRecoveryAlert(monitorId: string, url: string) {
+  async sendRecoveryAlert(userEmail: string, url: string) {
     const subject = `✅ RECOVERY: Monitor for ${url} is back UP!`;
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #cceecc; background-color: #f5fff5; border-radius: 8px;">
@@ -68,14 +68,14 @@ export class NotificationService implements OnModuleInit {
       </div>
     `;
 
-    await this.executeMailDispatch(subject, htmlContent);
+    await this.executeMailDispatch(userEmail, subject, htmlContent);
   }
 
-  private async executeMailDispatch(subject: string, html: string) {
+  private async executeMailDispatch(to:string, subject: string, html: string) {
     try {
       const info = (await this.transport.sendMail({
         from: process.env.SMTP_FROM,
-        to: 'admin@yourcompany.com',
+        to: to,
         subject: subject,
         html: html,
       })) as SMTPTransport.SentMessageInfo;
