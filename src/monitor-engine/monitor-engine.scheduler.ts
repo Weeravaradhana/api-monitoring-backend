@@ -33,6 +33,9 @@ export class MonitorEngineScheduler {
             lte: now,
           },
         },
+        include: {
+          user: true,
+        },
       });
 
       if (eligibleMonitors.length === 0) {
