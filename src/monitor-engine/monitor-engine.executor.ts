@@ -4,7 +4,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import { firstValueFrom } from 'rxjs';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { Monitor } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+
+export type MonitorWithUser = Prisma.MonitorGetPayload<{
+  include: { user: true };
+}>;
 
 @Injectable()
 export class MonitorEngineExecutor {
@@ -16,7 +20,7 @@ export class MonitorEngineExecutor {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  async executeJob(monitor: Monitor) {
+  async executeJob(monitor: MonitorWithUser) {
     const controller = new AbortController();
 
     const timeOutId = setTimeout(
@@ -93,6 +97,7 @@ export class MonitorEngineExecutor {
         name: monitor.name,
         statusCode,
         errorMessage,
+        userEmail: monitor.user.email,
       });
     } else {
       this.logger.log(
@@ -111,7 +116,7 @@ export class MonitorEngineExecutor {
   }
 
   private async saveResultAndUpdateMonitor(
-    monitor: Monitor,
+    monitor: MonitorWithUser,
     statusCode: number | null,
     responseTime: number,
     success: boolean,
