@@ -4,4 +4,5 @@ export interface MonitorEventPayload {
   name: string;
   statusCode: number | null;
   errorMessage: string | null;
+  userEmail: string;
 }
