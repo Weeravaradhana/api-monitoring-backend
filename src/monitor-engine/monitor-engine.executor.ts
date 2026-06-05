@@ -79,12 +79,34 @@ export class MonitorEngineExecutor {
     const endTime = process.hrtime.bigint();
     const responseTime = Number((endTime - startTime) / BigInt(1000000));
 
+    const currentState = success ? 'UP' : 'DOWN';
+    const previousState = monitor.lastState;
+
+    if (previousState !== currentState) {
+      this.logger.warn(
+        `[STATE TRANSITION] Monitor '${monitor.name}' changed from ${previousState} to ${currentState}!`,
+      );
+      const eventName = success ? 'monitor.up' : 'monitor.down';
+      this.eventEmitter.emit(eventName, {
+        monitorId: monitor.id,
+        url: monitor.url,
+        name: monitor.name,
+        statusCode,
+        errorMessage,
+      });
+    } else {
+      this.logger.log(
+        `[DEDUPLICATED] Monitor '${monitor.name}' remains ${currentState}. Alert suppressed.`,
+      );
+    }
+
     await this.saveResultAndUpdateMonitor(
       monitor,
       statusCode,
       responseTime,
       success,
       errorMessage,
+      currentState,
     );
   }
 
@@ -94,6 +116,7 @@ export class MonitorEngineExecutor {
     responseTime: number,
     success: boolean,
     errorMessage: string | null,
+    currentState: string,
   ) {
     const now = new Date();
     const nextRunAt = new Date(now.getTime() + monitor.interval * 1000);
@@ -112,7 +135,10 @@ export class MonitorEngineExecutor {
         }),
         this.prisma.monitor.update({
           where: { id: monitor.id },
-          data: { nextRunAt },
+          data: {
+            nextRunAt,
+            lastState: currentState,
+          },
         }),
       ]);
     } catch (dbError) {
