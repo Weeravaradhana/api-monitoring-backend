@@ -6,25 +6,10 @@ import SMTPTransport from 'nodemailer/lib/smtp-transport';
 export class NotificationService implements OnModuleInit {
   private readonly logger = new Logger(NotificationService.name);
   private transport: nodemailer.Transporter;
+  private isSmtpOperational = false;
 
   onModuleInit() {
-    this.transport = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT),
-      secure: false,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
-
-    this.transport.verify((error) => {
-      if (error) {
-        this.logger.error('SMTP Connection Failed:', error);
-      } else {
-        this.logger.log('SMTP Server Connected Successfully. Mailer Ready.');
-      }
-    });
+    this.initializeSmtpTransporter();
   }
 
   async sendFailureAlert(
@@ -71,7 +56,14 @@ export class NotificationService implements OnModuleInit {
     await this.executeMailDispatch(userEmail, subject, htmlContent);
   }
 
-  private async executeMailDispatch(to:string, subject: string, html: string) {
+  private async executeMailDispatch(to: string, subject: string, html: string) {
+    if (!this.isSmtpOperational) {
+      this.logger.warn(
+        `[MAIL SUPPRESSED] Cannot dispatch email to ${to}. SMTP Service is offline.`,
+      );
+      return;
+    }
+
     try {
       const info = (await this.transport.sendMail({
         from: process.env.SMTP_FROM,
@@ -86,11 +78,53 @@ export class NotificationService implements OnModuleInit {
       if (previewUrl) {
         this.logger.verbose(`View Outgoing Email Preview: ${previewUrl}`);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(
         'Failed to dispatch notification email via SMTP:',
         error,
       );
+      const err = error as NodeJS.ErrnoException;
+      if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
+        this.isSmtpOperational = false;
+        this.logger.warn(
+          'SMTP Server Connection lost. Setting Mailer to Offline mode.',
+        );
+      }
+    }
+  }
+
+  private initializeSmtpTransporter() {
+    try {
+      this.transport = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT),
+        secure: false,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      });
+
+      this.transport.verify((error) => {
+        if (error) {
+          this.logger.error(
+            '[SMTP ERROR] Production SMTP Handshake Failed. Mailer is Offline:',
+            error.message,
+          );
+          this.isSmtpOperational = false;
+        } else {
+          this.logger.log(
+            '[SMTP SUCCESS] Server Handshake Verified. Mail Engine Operational.',
+          );
+          this.isSmtpOperational = true;
+        }
+      });
+    } catch (initError) {
+      this.logger.error(
+        'Critical Error during SMTP Initialization:',
+        initError,
+      );
+      this.isSmtpOperational = false;
     }
   }
 }
