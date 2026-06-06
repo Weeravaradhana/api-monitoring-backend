@@ -4,10 +4,6 @@
     "paths": {
       "@generated/*": ["src/generated"]
     },
-    "include": [
-      "src/**/*",
-      "src/generated/**/*"
-    ],
     "moduleResolution": "nodenext",
     "resolvePackageJsonExports": true,
     "esModuleInterop": true,
@@ -28,5 +24,6 @@
     "noImplicitAny": false,
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false
-  }
+  },
+  "include": ["src/**/*", "src/generated/**/*"]
 }

@@ -1,0 +1,58 @@
+name: Uptime Shield Backend CI
+
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: monitoring_db_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 11
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+        env:
+          DATABASE_URL: "postgresql://monitor_user:monitor_password_2026@localhost:5432/api_monitoring_db?schema=public&connection_limit=20"
+
+      - name: Run Production Build
+        run: pnpm run build
+
+      - name: Run Unit & Integration Tests
+        run: pnpm test
+        env:
+          DATABASE_URL: "postgresql://monitor_user:monitor_password_2026@localhost:5432/api_monitoring_db?schema=public&connection_limit=20"
+          JWT_ACCESS_SECRET: 4f9c8a7b1e2d3c5f6a8b9d0e1f2a3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0
