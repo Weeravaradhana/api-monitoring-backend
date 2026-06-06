@@ -31,6 +31,23 @@ export class AuthService {
     });
 
     if (existingUser) {
+      if (!existingUser.isVerified) {
+        const otp = Math.floor(1000 + Math.random() * 900000).toString();
+
+        const hashOtp = crypto.createHash('sha256').update(otp).digest('hex');
+
+        const redisKey = `otp:user:${existingUser.id}`;
+        await this.redis.set(redisKey, hashOtp, 'EX', 300);
+
+        console.log(
+          `[PRODUCTION LOG] OTP for User ${existingUser.email}: ${otp}`,
+        );
+
+        return {
+          message: 'Registration successful. Please verify your OTP.',
+          userId: existingUser.id,
+        };
+      }
       throw new BadRequestException('Email already register');
     }
 
@@ -124,7 +141,7 @@ export class AuthService {
 
     return {
       accessToken,
-      refreshToke: rawRefreshToken,
+      refreshToken: rawRefreshToken,
     };
   }
 
@@ -185,7 +202,7 @@ export class AuthService {
       existingToken.isRevoked ||
       existingToken.expiresAt < new Date()
     ) {
-      await this.prisma.user.deleteMany({
+      await this.prisma.refreshToken.deleteMany({
         where: { id: dto.userId },
       });
 
