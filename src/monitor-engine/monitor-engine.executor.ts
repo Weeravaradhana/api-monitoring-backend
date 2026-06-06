@@ -4,7 +4,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import { firstValueFrom } from 'rxjs';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { Monitor } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+
+export type MonitorWithUser = Prisma.MonitorGetPayload<{
+  include: { user: true };
+}>;
 
 @Injectable()
 export class MonitorEngineExecutor {
@@ -16,7 +20,7 @@ export class MonitorEngineExecutor {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  async executeJob(monitor: Monitor) {
+  async executeJob(monitor: MonitorWithUser) {
     const controller = new AbortController();
 
     const timeOutId = setTimeout(
@@ -79,21 +83,45 @@ export class MonitorEngineExecutor {
     const endTime = process.hrtime.bigint();
     const responseTime = Number((endTime - startTime) / BigInt(1000000));
 
+    const currentState = success ? 'UP' : 'DOWN';
+    const previousState = monitor.lastState;
+
+    if (previousState !== currentState) {
+      this.logger.warn(
+        `[STATE TRANSITION] Monitor '${monitor.name}' changed from ${previousState} to ${currentState}!`,
+      );
+      const eventName = success ? 'monitor.up' : 'monitor.down';
+      this.eventEmitter.emit(eventName, {
+        monitorId: monitor.id,
+        url: monitor.url,
+        name: monitor.name,
+        statusCode,
+        errorMessage,
+        userEmail: monitor.user.email,
+      });
+    } else {
+      this.logger.log(
+        `[DEDUPLICATED] Monitor '${monitor.name}' remains ${currentState}. Alert suppressed.`,
+      );
+    }
+
     await this.saveResultAndUpdateMonitor(
       monitor,
       statusCode,
       responseTime,
       success,
       errorMessage,
+      currentState,
     );
   }
 
   private async saveResultAndUpdateMonitor(
-    monitor: Monitor,
+    monitor: MonitorWithUser,
     statusCode: number | null,
     responseTime: number,
     success: boolean,
     errorMessage: string | null,
+    currentState: string,
   ) {
     const now = new Date();
     const nextRunAt = new Date(now.getTime() + monitor.interval * 1000);
@@ -112,7 +140,10 @@ export class MonitorEngineExecutor {
         }),
         this.prisma.monitor.update({
           where: { id: monitor.id },
-          data: { nextRunAt },
+          data: {
+            nextRunAt,
+            lastState: currentState,
+          },
         }),
       ]);
     } catch (dbError) {

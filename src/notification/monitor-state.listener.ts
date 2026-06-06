@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { MonitorEngineExecutor } from '../monitor-engine/monitor-engine.executor';
 import { NotificationService } from './notification.service';
 import { OnEvent } from '@nestjs/event-emitter';
+import * as monitorEventPayloadInterface from '../interface/monitor.event.payload.interface';
 
 @Injectable()
 export class MonitorStateListener {
@@ -10,21 +11,32 @@ export class MonitorStateListener {
   constructor(private readonly notificationService: NotificationService) {}
 
   @OnEvent('monitor.down', { async: true })
-  handleMonitorDownEvent(payload: {
-    monitorId: string;
-    url: string;
-    statusCode: number | null;
-    errorMessage: string | null;
-  }) {
+  async handleMonitorDownEvent(
+    payload: monitorEventPayloadInterface.MonitorEventPayload,
+  ) {
     this.logger.log(
       `Received 'monitor.down' event for Monitor ID: ${payload.monitorId}. Processing alert...`,
     );
 
-    this.notificationService.sendFailureAlert(
-      payload.monitorId,
+    await this.notificationService.sendFailureAlert(
+      payload.userEmail,
       payload.url,
       payload.statusCode,
       payload.errorMessage,
+    );
+  }
+
+  @OnEvent('monitor.up', { async: true })
+  async handleMonitorUpEvent(
+    payload: monitorEventPayloadInterface.MonitorEventPayload,
+  ) {
+    this.logger.log(
+      `Received 'monitor.up' event for [${payload.name}]. Dispatching recovery alert...`,
+    );
+
+    await this.notificationService.sendRecoveryAlert(
+      payload.monitorId,
+      payload.url,
     );
   }
 }
