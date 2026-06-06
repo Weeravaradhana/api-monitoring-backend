@@ -15,6 +15,9 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const isValid = (await super.canActivate(context)) as boolean;
+    if (!isValid) return false;
+
     const request: express.Request = context.switchToHttp().getRequest();
     const accessToken = request.headers.authorization?.split(' ')[1];
 
@@ -26,6 +29,6 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
         );
       }
     }
-    return (await super.canActivate(context)) as boolean;
+    return true;
   }
 }
