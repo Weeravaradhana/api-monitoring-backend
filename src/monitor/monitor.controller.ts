@@ -28,13 +28,12 @@ export class MonitorController {
     dto: createMonitorDto.CreateMonitorDto,
     @GetUser('sub') userId: string,
   ) {
-    console.log('User id', userId);
     return this.monitorService.create(dto, userId);
   }
 
   @Get()
   findManyByUserId(
-    @GetUser('id') userId: string,
+    @GetUser('sub') userId: string,
     @Query('page') page: number,
     @Query('limit') limit: number,
   ) {
@@ -42,7 +41,7 @@ export class MonitorController {
   }
 
   @Get(':id')
-  findOneById(@Param('id') id: string, @GetUser('id') userId: string) {
+  findOneById(@Param('id') id: string, @GetUser('sub') userId: string) {
     return this.monitorService.findOneById(id, userId);
   }
 
@@ -50,14 +49,14 @@ export class MonitorController {
   @UsePipes(new ZodValidationPipe(createMonitorDto.UpdateMonitorSchema))
   update(
     @Param('id') id: string,
-    @GetUser('id') userId: string,
+    @GetUser('sub') userId: string,
     @Body() dto: createMonitorDto.UpdateMonitorDto,
   ) {
     return this.monitorService.update(id, userId, dto);
   }
 
   @Delete(':id')
-  softDelete(@Param('id') id: string, @GetUser('id') userId: string) {
+  softDelete(@Param('id') id: string, @GetUser('sub') userId: string) {
     return this.monitorService.softDelete(id, userId);
   }
 }
