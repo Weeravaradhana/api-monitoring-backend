@@ -32,7 +32,7 @@ export class AuthService {
 
     if (existingUser) {
       if (!existingUser.isVerified) {
-        const otp = Math.floor(1000 + Math.random() * 900000).toString();
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
         const hashOtp = crypto.createHash('sha256').update(otp).digest('hex');
 
