@@ -178,11 +178,13 @@ export class AuthService {
 
     return {
       message: 'Login successful',
-      ...tokens,
-      user: {
-        id: user.id,
-        email: user.email,
-        role: user.role,
+      data: {
+        ...tokens,
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+        },
       },
     };
   }
