@@ -17,10 +17,9 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isValid = (await super.canActivate(context)) as boolean;
     if (!isValid) return false;
-
     const request: express.Request = context.switchToHttp().getRequest();
-    const accessToken = request.headers.authorization?.split(' ')[1];
-
+    const accessToken = (request.cookies as Record<string, string> | undefined)
+      ?.accessToken;
     if (accessToken) {
       const isBlackList = await this.redis.get(`blacklist:${accessToken}`);
       if (isBlackList) {

@@ -17,15 +17,59 @@ export class MonitorRepository {
     });
   }
 
-  async findManyByUserId(userId: string, page: number, limit: number) {
+  async findManyByUserId(
+    userId: string,
+    page: number,
+    limit: number,
+    search?: string,
+  ) {
     const skip = (page - 1) * limit;
 
     const [totalItems, monitors] = await Promise.all([
       this.prisma.monitor.count({
-        where: { userId, status: { not: MonitorStatus.DELETED } },
+        where: {
+          userId,
+          status: { not: MonitorStatus.DELETED },
+          ...(search && {
+            OR: [
+              {
+                name: {
+                  contains: search,
+                  mode: 'insensitive',
+                },
+              },
+              {
+                url: {
+                  contains: search,
+                  mode: 'insensitive',
+                },
+              },
+            ],
+          }),
+        },
       }),
+
       this.prisma.monitor.findMany({
-        where: { userId, status: { not: MonitorStatus.DELETED } },
+        where: {
+          userId,
+          status: { not: MonitorStatus.DELETED },
+          ...(search && {
+            OR: [
+              {
+                name: {
+                  contains: search,
+                  mode: 'insensitive',
+                },
+              },
+              {
+                url: {
+                  contains: search,
+                  mode: 'insensitive',
+                },
+              },
+            ],
+          }),
+        },
         skip: skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
@@ -34,8 +78,10 @@ export class MonitorRepository {
           name: true,
           url: true,
           method: true,
-          status: true,
+          lastState: true,
+          timeout: true,
           interval: true,
+          updatedAt: true,
         },
       }),
     ]);
@@ -47,7 +93,7 @@ export class MonitorRepository {
       meta: {
         totalItems,
         itemCount: monitors.length,
-        itemPrePage: limit,
+        itemPerPage: limit,
         totalPages,
         currentPage: page,
       },
