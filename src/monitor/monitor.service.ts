@@ -19,8 +19,13 @@ export class MonitorService {
     return this.monitorRepo.create(userId, dto, nextRunTime);
   }
 
-  async findManyByUserId(userId: string, page: number, limit: number) {
-    return await this.monitorRepo.findManyByUserId(userId, page, limit);
+  async findManyByUserId(
+    userId: string,
+    page: number,
+    limit: number,
+    search?: string,
+  ) {
+    return await this.monitorRepo.findManyByUserId(userId, page, limit, search);
   }
 
   async findOneById(id: string, userId: string) {
