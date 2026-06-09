@@ -16,7 +16,7 @@ import { MonitorService } from './monitor.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 
-@Controller('monitor')
+@Controller('monitors')
 @UseGuards(JwtAuthGuard)
 export class MonitorController {
   constructor(private readonly monitorService: MonitorService) {}
@@ -36,8 +36,9 @@ export class MonitorController {
     @GetUser('sub') userId: string,
     @Query('page') page: number,
     @Query('limit') limit: number,
+    @Query('search') search?: string,
   ) {
-    return this.monitorService.findManyByUserId(userId, page, limit);
+    return this.monitorService.findManyByUserId(userId, page, limit, search);
   }
 
   @Get(':id')
