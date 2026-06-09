@@ -60,4 +60,5 @@ export class MonitorController {
   softDelete(@Param('id') id: string, @GetUser('sub') userId: string) {
     return this.monitorService.softDelete(id, userId);
   }
+
 }
