@@ -15,11 +15,15 @@ import { GetUser } from '../auth/decorators/get-user.decorator';
 import { MonitorService } from './monitor.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import { AnalyticsService } from './analytics.service';
 
 @Controller('monitors')
 @UseGuards(JwtAuthGuard)
 export class MonitorController {
-  constructor(private readonly monitorService: MonitorService) {}
+  constructor(
+    private readonly monitorService: MonitorService,
+    private readonly analyticsService: AnalyticsService,
+  ) {}
 
   @Post()
   @UsePipes(new ZodValidationPipe(createMonitorDto.createMonitorSchema))
@@ -61,4 +65,8 @@ export class MonitorController {
     return this.monitorService.softDelete(id, userId);
   }
 
+  @Get('analytics/kpi')
+  getKpiAnalytics(@GetUser('sub') userId: string) {
+    return this.analyticsService.getDashboardKpiAnalytics(userId);
+  }
 }

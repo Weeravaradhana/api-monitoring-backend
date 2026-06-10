@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { MonitorStatus } from '@prisma/client';
 
 @Injectable()
 export class AnalyticsService {
@@ -88,6 +89,104 @@ export class AnalyticsService {
         error,
       );
       throw new BadRequestException('Could not retrieve analytics data');
+    }
+  }
+
+  async getDashboardKpiAnalytics(userId: string) {
+    try {
+      const now = new Date();
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+      const monitors = await this.prisma.monitor.findMany({
+        where: { userId },
+        select: { status: true, lastState: true },
+      });
+
+      const totalCount = monitors.length;
+      const activeCount = monitors.filter(
+        (m) => m.status == MonitorStatus.ACTIVE,
+      ).length;
+      const downCount = monitors.filter((m) => m.lastState === 'DOWN').length;
+      console.log('down count', downCount);
+
+      const rawResults = await this.prisma.monitoringResult.findMany({
+        where: {
+          monitor: { userId },
+          checkedAt: { gte: sevenDaysAgo },
+        },
+        select: {
+          success: true,
+          checkedAt: true,
+        },
+        orderBy: { checkedAt: 'asc' },
+      });
+
+      const totalCharts: { v: number }[] = [];
+      const activeCharts: { v: number }[] = [];
+      const downCharts: { v: number }[] = [];
+      const uptimeCharts: { v: number }[] = [];
+
+      for (let i = 6; i >= 0; i--) {
+        const targetDate = new Date();
+        targetDate.setDate(now.getDate() - i);
+        const dateString = targetDate.toDateString();
+
+        const dayResult = rawResults.filter(
+          (r) => new Date(r.checkedAt).toDateString() === dateString,
+        );
+
+        const totalChecksOnDay = dayResult.length;
+        const successChecksOnDay = dayResult.filter((r) => r.success).length;
+        const failedChecksOnDay = totalChecksOnDay - successChecksOnDay;
+
+        const uptimePercentage =
+          totalChecksOnDay > 0
+            ? Number(((successChecksOnDay / totalChecksOnDay) * 100).toFixed(2))
+            : 100;
+
+        totalCharts.push({ v: totalCount });
+        activeCharts.push({ v: successChecksOnDay > 0 ? activeCount : 0 });
+        downCharts.push({ v: failedChecksOnDay });
+        uptimeCharts.push({ v: uptimePercentage });
+      }
+
+      const totalDelta = totalCount - (totalCharts[0]?.v || 0);
+      const activeDelta = activeCount - (activeCharts[0]?.v || 0);
+      const downDelta =
+        downCharts[downCharts.length - 1]?.v - (downCharts[0]?.v || 0);
+
+      return {
+        totalMonitors: {
+          currentValue: totalCount,
+          delta: totalDelta >= 0 ? `+${totalDelta}` : `${totalDelta}`,
+          deltaPositive: totalDelta >= 0,
+          chartData: totalCharts,
+        },
+        activeMonitors: {
+          currentValue: activeCount,
+          delta: activeDelta >= 0 ? `+${activeDelta}` : `${activeDelta}`,
+          deltaPositive: activeDelta >= 0,
+          chartData: activeCharts,
+        },
+        downMonitors: {
+          currentValue: downCount,
+          delta: downDelta <= 0 ? `${downDelta}` : `+${downDelta}`,
+          deltaPositive: downDelta <= 0,
+          chartData: downCharts,
+        },
+        averageUptime: {
+          currentValue:
+            uptimeCharts.length > 0
+              ? `${uptimeCharts[uptimeCharts.length - 1].v}%`
+              : '100%',
+          delta: '+0.00%',
+          deltaPositive: true,
+          chartData: uptimeCharts,
+        },
+      };
+    } catch (error) {
+      this.logger.error('Error compiling dashboard KPI analytics:', error);
+      throw new BadRequestException('Could not generate dashboard KPI data');
     }
   }
 
