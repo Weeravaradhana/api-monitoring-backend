@@ -16,4 +16,10 @@ export class AnalyticsController {
   ) {
     return this.analyticsService.getMonitorMetrics(monitorId, range, userId);
   }
+
+  @Get(':id/metrics')
+  async getMonitorMetrics(@Param('id') id: string) {
+    const data = await this.analyticsService.getMonitorDashboardMetrics(id);
+    return { responseTimeData: data };
+  }
 }
