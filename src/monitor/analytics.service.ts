@@ -1,6 +1,23 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { MonitorStatus } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+
+enum MonitorStatus {
+  ACTIVE = 'ACTIVE',
+}
+
+export enum Range {
+  DAY_1 = '24h',
+  DAY_7 = '7d',
+  DAY_30 = '30d',
+}
+
+interface DbChartResult {
+  label: string;
+  avgMs: number;
+  totalChecks: number;
+  successChecks: number;
+}
 
 @Injectable()
 export class AnalyticsService {
@@ -8,7 +25,7 @@ export class AnalyticsService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async getMonitorMetrics(monitorId: string, range: string, userId: string) {
+  async getMonitorMetrics(monitorId: string, range: Range, userId: string) {
     const monitorExists = await this.prisma.monitor.findFirst({
       where: { id: monitorId, userId },
     });
@@ -190,98 +207,102 @@ export class AnalyticsService {
     }
   }
 
-  async getMonitorDashboardMetrics(monitorId: string) {
-    const results = await this.prisma.monitoringResult.findMany({
-      where: { monitorId: monitorId },
-      orderBy: {
-        checkedAt: 'asc',
-      },
-      take: 50,
-    });
+  // =========================================================================
+  // 📈 GET MONITOR DASHBOARD METRICS (FIXED VERSION)
+  // =========================================================================
+  async getMonitorDashboardMetrics(monitorId: string, range: Range) {
+    const startTime = this.calculateStartTime(range);
 
-    const responseTimeTrend: { day: string; ms: number }[] = [];
-    const uptimeOverTime: { day: string; percentage: number }[] = [];
+    let selectDateFormat: string;
+    let truncateType: 'hour' | 'day';
+
+    if (range === Range.DAY_1) {
+      selectDateFormat = 'HH24:MI';
+      truncateType = 'hour';
+    } else if (range === Range.DAY_7) {
+      selectDateFormat = 'Dy';
+      truncateType = 'day';
+    } else {
+      selectDateFormat = 'Mon DD';
+      truncateType = 'day';
+    }
+
+    const dbCharts = await this.prisma.$queryRaw<DbChartResult[]>`
+      SELECT
+        to_char(date_trunc('${Prisma.raw(truncateType)}', "checkedAt"), ${selectDateFormat}) as "label",
+        ROUND(AVG("responseTime")) as "avgMs",
+        COUNT(*) as "totalChecks",
+        COUNT(CASE WHEN "success" = true THEN 1 END) as "successChecks"
+      FROM "MonitoringResult"
+      WHERE "monitorId" = ${monitorId} AND "checkedAt" >= ${startTime}
+      GROUP BY date_trunc('${Prisma.raw(truncateType)}', "checkedAt")
+      ORDER BY 1 ASC;
+    `;
+
+    const responseTimeTrend = dbCharts.map((row) => ({
+      day: row.label,
+      ms: Number(row.avgMs) || 0,
+    }));
+
+    const uptimeOverTime = dbCharts.map((row) => ({
+      day: row.label,
+      percentage:
+        Number(row.totalChecks) > 0
+          ? Number(
+              (
+                (Number(row.successChecks) / Number(row.totalChecks)) *
+                100
+              ).toFixed(1),
+            )
+          : 100,
+    }));
+
+    const counts = await this.prisma.monitoringResult.groupBy({
+      by: ['success'],
+      where: { monitorId, checkedAt: { gte: startTime } },
+      _count: { _all: true },
+    });
 
     let totalSuccess = 0;
     let totalFailure = 0;
-
-    const downtimeTimeline: {
-      status: string;
-      checkedAt: Date;
-      errorMessage: string | null;
-    }[] = [];
-
-    const dayGroups: {
-      [key: string]: { successCount: number; totalCount: number };
-    } = {};
-
-    results.forEach((result) => {
-      const dateObj = new Date(result.checkedAt);
-      const timeStr = dateObj.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      });
-
-      responseTimeTrend.push({
-        day: timeStr,
-        ms: result.responseTime,
-      });
-
-      if (result.success) {
-        totalSuccess++;
-      } else {
-        totalFailure++;
-
-        downtimeTimeline.push({
-          status: 'DOWN',
-          checkedAt: result.checkedAt,
-          errorMessage: result.errorMessage,
-        });
-      }
-
-      if (!dayGroups[timeStr]) {
-        dayGroups[timeStr] = { successCount: 0, totalCount: 0 };
-      }
-      dayGroups[timeStr].totalCount++;
-      if (result.success) {
-        dayGroups[timeStr].successCount++;
-      }
+    counts.forEach((c) => {
+      if (c.success) totalSuccess = c._count._all;
+      else totalFailure = c._count._all;
     });
 
-    const finalResponseTimeTrend = responseTimeTrend.slice(-7);
-
-    Object.keys(dayGroups).forEach((day) => {
-      const group = dayGroups[day];
-      const uptimePercent = (group.successCount / group.totalCount) * 100;
-      uptimeOverTime.push({
-        day: day,
-        percentage: Math.round(uptimePercent * 10) / 10,
-      });
+    const downtimeTimeline = await this.prisma.monitoringResult.findMany({
+      where: { monitorId, success: false, checkedAt: { gte: startTime } },
+      select: { checkedAt: true, errorMessage: true },
+      orderBy: { checkedAt: 'desc' },
+      take: 5,
     });
 
     return {
       charts: {
-        responseTimeTrend: finalResponseTimeTrend,
-        uptimeOverTime: uptimeOverTime,
+        responseTimeTrend,
+        uptimeOverTime,
         successVsFailure: [
           { name: 'Success', value: totalSuccess },
           { name: 'Failure', value: totalFailure },
         ],
-        downtimeTimeline: downtimeTimeline.slice(-5),
+        downtimeTimeline: downtimeTimeline.map((d) => ({
+          status: 'DOWN',
+          checkedAt: d.checkedAt,
+          errorMessage: d.errorMessage,
+        })),
       },
     };
   }
 
-  private calculateStartTime(range: string) {
+  private calculateStartTime(range: Range) {
     const now = new Date();
 
     switch (range) {
-      case '24h':
+      case Range.DAY_1:
         return new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      case '7d':
+      case Range.DAY_7:
         return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      case '30d':
+      case Range.DAY_30:
         return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       default:
         throw new BadRequestException(

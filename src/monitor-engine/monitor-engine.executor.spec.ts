@@ -4,7 +4,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
 import { AxiosResponse } from 'axios';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
 describe('MonitorEngineExecutor (Unit Test)', () => {
   let executor: MonitorEngineExecutor;
@@ -64,13 +64,13 @@ describe('MonitorEngineExecutor (Unit Test)', () => {
       config: { headers: {} as any },
     };
     mockHttpService.request.mockReturnValue(of(mockResponse));
+
     await executor.executeJob(mockMonitor);
-    expect(eventEmitter.emit).not.toHaveBeenCalledWith(
-      'monitor.up',
-      expect.any(Object),
-    );
+
+    expect(eventEmitter.emit).not.toHaveBeenCalled();
   });
-  it('should detect state change and emit monitor.down when website fails', async () => {
+
+  it('should detect state change and emit monitor.down when website fails with 500 status', async () => {
     const mockMonitor: any = {
       id: 'monitor-uuid-456',
       name: 'Broken Site Test',
@@ -94,11 +94,46 @@ describe('MonitorEngineExecutor (Unit Test)', () => {
     mockHttpService.request.mockReturnValue(of(mockResponse));
 
     await executor.executeJob(mockMonitor);
+
     expect(eventEmitter.emit).toHaveBeenCalledWith(
       'monitor.down',
       expect.objectContaining({
         monitorId: 'monitor-uuid-456',
+        statusCode: 500,
         userEmail: 'pabasara@test.com',
+      }),
+    );
+  });
+
+  it('should emit monitor.down when network error occurs (e.g. Connection Refused)', async () => {
+    const mockMonitor: any = {
+      id: 'monitor-uuid-789',
+      name: 'Network Failure Test',
+      url: 'https://nonexistent-domain.com',
+      method: 'GET',
+      timeout: 5,
+      interval: 60,
+      headers: {},
+      body: null,
+      lastState: 'UP',
+      user: { email: 'pabasara@test.com' },
+    };
+
+    const mockAxiosError = {
+      isAxiosError: true,
+      message: 'connect ECONNREFUSED',
+      response: undefined,
+    };
+    mockHttpService.request.mockReturnValue(throwError(() => mockAxiosError));
+
+    await executor.executeJob(mockMonitor);
+
+    expect(eventEmitter.emit).toHaveBeenCalledWith(
+      'monitor.down',
+      expect.objectContaining({
+        monitorId: 'monitor-uuid-789',
+        statusCode: null,
+        errorMessage: 'connect ECONNREFUSED',
       }),
     );
   });
