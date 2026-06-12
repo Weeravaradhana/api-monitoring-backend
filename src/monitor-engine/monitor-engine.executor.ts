@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { PrismaService } from '../prisma/prisma.service';
-import axios, { AxiosError, AxiosRequestConfig } from 'axios';
+import axios, { AxiosRequestConfig } from 'axios';
 import { firstValueFrom } from 'rxjs';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Prisma } from '@prisma/client';
@@ -45,36 +45,20 @@ export class MonitorEngineExecutor {
         signal: controller.signal,
         validateStatus: () => true,
       };
-
       const response = await firstValueFrom(this.httpService.request(config));
       statusCode = response.status;
       success = statusCode >= 200 && statusCode < 400;
-      if (!success) {
-        errorMessage = `HTTP Error Status: ${statusCode}`;
-        this.eventEmitter.emit('monitor.down', {
-          monitorId: monitor.id,
-          url: monitor.url,
-          statusCode,
-          errorMessage,
-        });
-      }
     } catch (error: unknown) {
       success = false;
-      if (axios.isAxiosError(error)) {
-        if (axios.isCancel(error)) {
-          const axiosError = error as AxiosError<any>;
-
-          if (
-            axiosError.code === 'ECONNABORTED' ||
-            axiosError.message.includes('timeout')
-          )
-            statusCode = 408;
-          errorMessage = 'Request Timeout';
-        } else {
-          const genericError = error as Error;
-          statusCode = null;
-          errorMessage = genericError.message || 'Unknow System Error';
-        }
+      if (axios.isCancel(error) || (error as Error).name === 'AbortError') {
+        statusCode = 408;
+        errorMessage = 'Request Timeout';
+      } else if (axios.isAxiosError(error)) {
+        statusCode = error.response?.status || null;
+        errorMessage = error.message || 'Axios Network Error';
+      } else {
+        statusCode = null;
+        errorMessage = (error as Error).message || 'Unknown System Error';
       }
     } finally {
       clearTimeout(timeOutId);
