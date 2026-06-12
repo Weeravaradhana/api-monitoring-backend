@@ -1,5 +1,5 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
-import { AnalyticsService } from './analytics.service';
+import { AnalyticsService, Range } from './analytics.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 
@@ -11,15 +11,21 @@ export class AnalyticsController {
   @Get(':id/analytics')
   async getAnalytics(
     @Param('id') monitorId: string,
-    @Query('range') range: string = '24h',
+    @Query('range') range: Range = Range.DAY_1,
     @GetUser('sub') userId: string,
   ) {
     return this.analyticsService.getMonitorMetrics(monitorId, range, userId);
   }
 
   @Get(':id/metrics')
-  async getMonitorMetrics(@Param('id') id: string) {
-    const data = await this.analyticsService.getMonitorDashboardMetrics(id);
+  async getMonitorMetrics(
+    @Param('id') id: string,
+    @Query('range') range: Range = Range.DAY_1,
+  ) {
+    const data = await this.analyticsService.getMonitorDashboardMetrics(
+      id,
+      range,
+    );
     return { responseTimeData: data };
   }
 }
