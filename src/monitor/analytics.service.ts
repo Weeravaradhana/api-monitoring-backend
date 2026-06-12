@@ -190,6 +190,89 @@ export class AnalyticsService {
     }
   }
 
+  async getMonitorDashboardMetrics(monitorId: string) {
+    const results = await this.prisma.monitoringResult.findMany({
+      where: { monitorId: monitorId },
+      orderBy: {
+        checkedAt: 'asc',
+      },
+      take: 50,
+    });
+
+    const responseTimeTrend: { day: string; ms: number }[] = [];
+    const uptimeOverTime: { day: string; percentage: number }[] = [];
+
+    let totalSuccess = 0;
+    let totalFailure = 0;
+
+    const downtimeTimeline: {
+      status: string;
+      checkedAt: Date;
+      errorMessage: string | null;
+    }[] = [];
+
+    const dayGroups: {
+      [key: string]: { successCount: number; totalCount: number };
+    } = {};
+
+    results.forEach((result) => {
+      const dateObj = new Date(result.checkedAt);
+      const timeStr = dateObj.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+
+      responseTimeTrend.push({
+        day: timeStr,
+        ms: result.responseTime,
+      });
+
+      if (result.success) {
+        totalSuccess++;
+      } else {
+        totalFailure++;
+
+        downtimeTimeline.push({
+          status: 'DOWN',
+          checkedAt: result.checkedAt,
+          errorMessage: result.errorMessage,
+        });
+      }
+
+      if (!dayGroups[timeStr]) {
+        dayGroups[timeStr] = { successCount: 0, totalCount: 0 };
+      }
+      dayGroups[timeStr].totalCount++;
+      if (result.success) {
+        dayGroups[timeStr].successCount++;
+      }
+    });
+
+    const finalResponseTimeTrend = responseTimeTrend.slice(-7);
+
+    Object.keys(dayGroups).forEach((day) => {
+      const group = dayGroups[day];
+      const uptimePercent = (group.successCount / group.totalCount) * 100;
+      uptimeOverTime.push({
+        day: day,
+        percentage: Math.round(uptimePercent * 10) / 10,
+      });
+    });
+
+    return {
+      charts: {
+        responseTimeTrend: finalResponseTimeTrend,
+        uptimeOverTime: uptimeOverTime,
+        successVsFailure: [
+          { name: 'Success', value: totalSuccess },
+          { name: 'Failure', value: totalFailure },
+        ],
+        downtimeTimeline: downtimeTimeline.slice(-5),
+      },
+    };
+  }
+
   private calculateStartTime(range: string) {
     const now = new Date();
 
