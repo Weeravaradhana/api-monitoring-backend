@@ -70,6 +70,15 @@ export class MonitorEngineExecutor {
     const currentState = success ? 'UP' : 'DOWN';
     const previousState = monitor.lastState;
 
+    await this.saveResultAndUpdateMonitor(
+      monitor,
+      statusCode,
+      responseTime,
+      success,
+      errorMessage,
+      currentState,
+    );
+
     if (previousState !== currentState) {
       this.logger.warn(
         `[STATE TRANSITION] Monitor '${monitor.name}' changed from ${previousState} to ${currentState}!`,
@@ -120,12 +129,17 @@ export class MonitorEngineExecutor {
   ) {
     const now = new Date();
     const nextRunAt = new Date(now.getTime() + monitor.interval * 1000);
-    const lastNotificationAtUpdate = success
-      ? null
-      : monitor.lastNotificationaAt;
+    const updateData: Prisma.MonitorUpdateInput = {
+      nextRunAt,
+      lastState: currentState,
+    };
+
+    if (success) {
+      updateData.lastNotificationaAt = null;
+    }
 
     try {
-      await this.prisma.$transaction([
+      const [updatedMonitor] = await this.prisma.$transaction([
         this.prisma.monitoringResult.create({
           data: {
             monitorId: monitor.id,
@@ -138,13 +152,11 @@ export class MonitorEngineExecutor {
         }),
         this.prisma.monitor.update({
           where: { id: monitor.id },
-          data: {
-            nextRunAt,
-            lastState: currentState,
-            lastNotificationaAt: lastNotificationAtUpdate,
-          },
+          data: updateData,
         }),
       ]);
+
+      return updatedMonitor;
     } catch (dbError) {
       this.logger.error(
         `Failed to save execution results for Monitor ${monitor.id}:`,
