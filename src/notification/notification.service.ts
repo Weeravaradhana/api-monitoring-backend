@@ -17,8 +17,8 @@ export class NotificationService implements OnModuleInit {
     url: string,
     statusCode: number | null,
     errorMessage: string | null,
-  ) {
-    const subject = `🚨 CRITICAL ALERT: Monitor for ${url} is DOWN!`;
+  ): Promise<boolean> {
+    const subject = `CRITICAL ALERT: Monitor for ${url} is DOWN!`;
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ffcccc; background-color: #fff5f5; border-radius: 8px;">
         <h2 style="color: #cc0000; margin-bottom: 5px;">🔴 Incident Detected</h2>
@@ -34,11 +34,11 @@ export class NotificationService implements OnModuleInit {
       </div>
     `;
 
-    await this.executeMailDispatch(userEmail, subject, htmlContent);
+    return await this.executeMailDispatch(userEmail, subject, htmlContent);
   }
 
-  async sendRecoveryAlert(userEmail: string, url: string) {
-    const subject = `✅ RECOVERY: Monitor for ${url} is back UP!`;
+  async sendRecoveryAlert(userEmail: string, url: string): Promise<boolean> {
+    const subject = `RECOVERY: Monitor for ${url} is back UP!`;
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #cceecc; background-color: #f5fff5; border-radius: 8px;">
         <h2 style="color: #008800; margin-bottom: 5px;">🟢 Incident Resolved</h2>
@@ -53,7 +53,7 @@ export class NotificationService implements OnModuleInit {
       </div>
     `;
 
-    await this.executeMailDispatch(userEmail, subject, htmlContent);
+    return await this.executeMailDispatch(userEmail, subject, htmlContent);
   }
 
   private async executeMailDispatch(to: string, subject: string, html: string) {
@@ -61,7 +61,7 @@ export class NotificationService implements OnModuleInit {
       this.logger.warn(
         `[MAIL SUPPRESSED] Cannot dispatch email to ${to}. SMTP Service is offline.`,
       );
-      return;
+      return false;
     }
 
     try {
@@ -78,6 +78,8 @@ export class NotificationService implements OnModuleInit {
       if (previewUrl) {
         this.logger.verbose(`View Outgoing Email Preview: ${previewUrl}`);
       }
+
+      return true;
     } catch (error: unknown) {
       this.logger.error(
         'Failed to dispatch notification email via SMTP:',
@@ -90,6 +92,7 @@ export class NotificationService implements OnModuleInit {
           'SMTP Server Connection lost. Setting Mailer to Offline mode.',
         );
       }
+      return false;
     }
   }
 
