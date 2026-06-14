@@ -42,6 +42,8 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  alertsMutedUntil DateTime?
+
   refreshTokens    RefreshToken[]
   otpVerifications OtpVerification[]
   passwordResets   PasswordResetToken[]
@@ -101,9 +103,13 @@ model Monitor {
   updatedAt DateTime      @updatedAt
   lastState String        @default("UP")
 
+  lastNotificationaAt DateTime?
+  notifyEmail         String?
+
   userId  String
   user    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   results MonitoringResult[]
+  notificationLogs NotificationLog[]
 
   @@index([userId])
   @@index([status, nextRunAt])
@@ -121,4 +127,18 @@ model MonitoringResult {
 
   @@id([monitorId, checkedAt])
   @@index([monitorId, checkedAt(sort: Desc)])
+}
+
+model NotificationLog {
+  id         String   @id @default(uuid())
+  monitorId  String
+  stateSent  String
+  sentTo     String
+  sentAt     DateTime @default(now())
+  success    Boolean  @default(true)
+  errorMessage String? @db.Text
+
+  monitor  Monitor  @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  @@index([monitorId])
 }
