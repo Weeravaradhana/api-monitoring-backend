@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Patch,
   Post,
   Req,
   UseGuards,
@@ -16,6 +17,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { GetUser } from './decorators/get-user.decorator';
 import express from 'express';
 import * as jwtPayloadInterface from './interface/jwt-payload.interface';
+import { UpdateMuteSettingsDto } from './dto/update-mute-setting.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -55,5 +57,18 @@ export class AuthController {
   ) {
     const accessToken = req.headers.authorization!.split('')[1];
     return this.authService.logout(dto.refreshToken, accessToken, jwtPayload);
+  }
+
+  @Patch('mute-settings')
+  @UseGuards(JwtAuthGuard)
+  @UsePipes(new ValidationPipe({ whitelist: true }))
+  async updateMuteSettings(
+    @GetUser('sub') userId: string,
+    @Body() dto: UpdateMuteSettingsDto,
+  ) {
+    return await this.authService.updateMuteStatus(
+      userId,
+      dto.alertsMutedUntil,
+    );
   }
 }
