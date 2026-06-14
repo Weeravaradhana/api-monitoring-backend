@@ -34,7 +34,7 @@ export class MonitorEngineScheduler {
           },
         },
         include: {
-          user: true,
+          tenant: { include: { users: true } },
         },
       });
 
