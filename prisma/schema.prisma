@@ -22,6 +22,7 @@ enum HttpMethod {
 
 enum Role {
   USER
+  ORGANIZER
   ADMIN
 }
 
@@ -31,13 +32,29 @@ enum MonitorStatus {
   DELETED
 }
 
+enum TenantType {
+  PERSONAL
+  ORGANIZATION
+}
+
+model Tenant {
+  id        String     @id @default(uuid())
+  name      String     @db.VarChar(255)
+  type      TenantType @default(PERSONAL)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  users    User[]
+  monitors Monitor[]
+}
+
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
   passwordHash String
   firstName    String?
   lastName     String?
-  role         Role     @default(USER)
+  role         Role     @default(ORGANIZER)
   isVerified   Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -47,9 +64,12 @@ model User {
   refreshTokens    RefreshToken[]
   otpVerifications OtpVerification[]
   passwordResets   PasswordResetToken[]
-  monitors         Monitor[]
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([email])
+  @@index([tenantId])
 }
 
 model RefreshToken {
@@ -106,12 +126,12 @@ model Monitor {
   lastNotificationaAt DateTime?
   notifyEmail         String?
 
-  userId  String
-  user    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  results MonitoringResult[]
+  tenantId         String
+  tenant           Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  results          MonitoringResult[]
   notificationLogs NotificationLog[]
 
-  @@index([userId])
+  @@index([tenantId])
   @@index([status, nextRunAt])
 }
 
@@ -130,15 +150,15 @@ model MonitoringResult {
 }
 
 model NotificationLog {
-  id         String   @id @default(uuid())
-  monitorId  String
-  stateSent  String
-  sentTo     String
-  sentAt     DateTime @default(now())
-  success    Boolean  @default(true)
-  errorMessage String? @db.Text
+  id           String   @id @default(uuid())
+  monitorId    String
+  stateSent    String
+  sentTo       String
+  sentAt       DateTime @default(now())
+  success      Boolean  @default(true)
+  errorMessage String?  @db.Text
 
-  monitor  Monitor  @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  monitor Monitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
 
   @@index([monitorId])
 }
