@@ -37,6 +37,32 @@ enum TenantType {
   ORGANIZATION
 }
 
+model WebhookConfig {
+  id          String   @id @default(uuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  url         String
+  isActive    Boolean  @default(true)
+  secretToken String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model SlackConfig {
+  id          String   @id @default(uuid())
+  tenantId    String   @unique
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  webhookUrl  String
+  channelName String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
 model Tenant {
   id        String     @id @default(uuid())
   name      String     @db.VarChar(255)
@@ -44,8 +70,10 @@ model Tenant {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
-  users    User[]
-  monitors Monitor[]
+  users       User[]
+  monitors    Monitor[]
+  webhooks    WebhookConfig[]
+  slackConfig SlackConfig?
 }
 
 model User {
