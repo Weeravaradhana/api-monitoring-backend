@@ -285,4 +285,13 @@ export class AuthService {
       message: 'Logged out successfully from all devices.',
     };
   }
+
+  async updateMuteStatus(userId: string, alertsMutedUntil: string | null) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        alertsMutedUntil: alertsMutedUntil ? new Date(alertsMutedUntil) : null,
+      },
+    });
+  }
 }
