@@ -24,10 +24,10 @@ export class MonitorStateListener {
 
     const monitor = await this.prisma.monitor.findUnique({
       where: { id: payload.monitorId },
-      include: { user: true },
+      include: { tenant: { include: { users: true } } },
     });
 
-    if (!monitor || !monitor.user) return;
+    if (!monitor || !monitor.tenant.users) return;
 
     const now = new Date();
 
@@ -43,7 +43,7 @@ export class MonitorStateListener {
       }
     }
 
-    const targetEmail = monitor.notifyEmail || monitor.user.email;
+    const targetEmail = monitor.tenant.users.map((e) => e.email);
 
     const isSuccess = await this.notificationService.sendFailureAlert(
       targetEmail,
@@ -61,7 +61,7 @@ export class MonitorStateListener {
         data: {
           monitorId: payload.monitorId,
           stateSent: 'DOWN',
-          sentTo: targetEmail,
+          sentTo: targetEmail.join(', '),
           success: isSuccess,
           errorMessage: isSuccess ? null : 'SMTP Dispatch Failure',
         },
@@ -79,24 +79,27 @@ export class MonitorStateListener {
 
     const monitor = await this.prisma.monitor.findUnique({
       where: { id: payload.monitorId },
-      include: { user: true },
+      include: { tenant: { include: { users: true } } },
     });
 
-    if (!monitor || !monitor.user) return;
+    if (!monitor || !monitor.tenant || !monitor.tenant.users.length) return;
 
     const now = new Date();
+    const activeUsers = monitor.tenant.users.filter(
+      (user) => !user.alertsMutedUntil || user.alertsMutedUntil <= now,
+    );
 
-    if (monitor.user.alertsMutedUntil && monitor.user.alertsMutedUntil > now) {
+    if (activeUsers.length === 0) {
       this.logger.warn(
-        `[ALERT MUTED] User suppressed all alerts. Skipping recovery log.`,
+        `[ALERT MUTED] Workspace alerts are muted. Skipping recovery email.`,
       );
       return;
     }
 
-    const targetEmail = monitor.notifyEmail || monitor.user.email;
+    const targetEmails = activeUsers.map((e) => e.email);
 
     const isSuccess = await this.notificationService.sendRecoveryAlert(
-      targetEmail,
+      targetEmails,
       payload.url,
     );
 
@@ -109,7 +112,7 @@ export class MonitorStateListener {
         data: {
           monitorId: payload.monitorId,
           stateSent: 'UP',
-          sentTo: targetEmail,
+          sentTo: targetEmails.join(', '),
           success: isSuccess,
           errorMessage: isSuccess ? null : 'SMTP Dispatch Failure',
         },
