@@ -12,9 +12,9 @@ export class AnalyticsController {
   async getAnalytics(
     @Param('id') monitorId: string,
     @Query('range') range: Range = Range.DAY_1,
-    @GetUser('sub') userId: string,
+    @GetUser('tenantId') tenantId: string,
   ) {
-    return this.analyticsService.getMonitorMetrics(monitorId, range, userId);
+    return this.analyticsService.getMonitorMetrics(monitorId, range, tenantId);
   }
 
   @Get(':id/metrics')
