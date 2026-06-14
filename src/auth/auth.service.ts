@@ -60,7 +60,17 @@ export class AuthService {
         passwordHash: hashPassword,
         firstName: dto.firstName,
         lastName: dto.lastName,
-        role: 'USER',
+        role: 'ORGANIZER',
+
+        tenant: {
+          create: {
+            name: `${dto.firstName || 'Personal'}'s Workspace`,
+            type: 'PERSONAL',
+          },
+        },
+      },
+      include: {
+        tenant: true,
       },
     });
 
@@ -76,6 +86,7 @@ export class AuthService {
     return {
       message: 'Registration successful. Please verify your OTP.',
       userId: user.id,
+      tenantId: user.tenantId,
     };
   }
 
@@ -115,6 +126,7 @@ export class AuthService {
       sub: dto.userId,
       email: dto.email,
       role: dto.role,
+      tenantId: dto.tenantId,
     };
 
     const accessToken = await this.jwtService.signAsync(payload, {
@@ -173,6 +185,7 @@ export class AuthService {
       userId: user.id,
       email: user.email,
       role: user.role,
+      tenantId: user.tenantId,
     };
     const tokens = await this.generateToken(tokenCreateDetails);
 
@@ -184,6 +197,7 @@ export class AuthService {
           id: user.id,
           email: user.email,
           role: user.role,
+          tenantId: user.tenantId,
         },
       },
     };
@@ -227,6 +241,7 @@ export class AuthService {
       userId: selectedUser.id,
       email: selectedUser.email,
       role: selectedUser.role,
+      tenantId: selectedUser.tenantId,
     };
 
     const generatedTokens = await this.generateToken(tokenCreateDetails);

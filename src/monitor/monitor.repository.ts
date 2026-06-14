@@ -7,18 +7,18 @@ import { Injectable } from '@nestjs/common';
 export class MonitorRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(userId: string, dto: CreateMonitorDto, nextRunAt: Date) {
+  create(tenantId: string, dto: CreateMonitorDto, nextRunAt: Date) {
     return this.prisma.monitor.create({
       data: {
         ...dto,
-        userId,
+        tenantId,
         nextRunAt,
       },
     });
   }
 
   async findManyByUserId(
-    userId: string,
+    tenantId: string,
     page: number,
     limit: number,
     search?: string,
@@ -28,7 +28,7 @@ export class MonitorRepository {
     const [totalItems, monitors] = await Promise.all([
       this.prisma.monitor.count({
         where: {
-          userId,
+          tenantId,
           status: { not: MonitorStatus.DELETED },
           ...(search && {
             OR: [
@@ -51,7 +51,7 @@ export class MonitorRepository {
 
       this.prisma.monitor.findMany({
         where: {
-          userId,
+          tenantId,
           status: { not: MonitorStatus.DELETED },
           ...(search && {
             OR: [
@@ -100,22 +100,22 @@ export class MonitorRepository {
     };
   }
 
-  findOneById(id: string, userId: string) {
+  findOneById(id: string, tenantId: string) {
     return this.prisma.monitor.findFirst({
-      where: { id, userId, status: { not: MonitorStatus.DELETED } },
+      where: { id, tenantId, status: { not: MonitorStatus.DELETED } },
     });
   }
 
-  update(id: string, userId: string, dto: UpdateMonitorDto) {
+  update(id: string, tenantId: string, dto: UpdateMonitorDto) {
     return this.prisma.monitor.updateMany({
-      where: { id, userId, status: { not: MonitorStatus.DELETED } },
+      where: { id, tenantId, status: { not: MonitorStatus.DELETED } },
       data: dto,
     });
   }
 
-  softDelete(id: string, userId: string) {
+  softDelete(id: string, tenantId: string) {
     return this.prisma.monitor.updateMany({
-      where: { id, userId },
+      where: { id, tenantId },
       data: { status: MonitorStatus.DELETED },
     });
   }

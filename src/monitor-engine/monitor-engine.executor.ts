@@ -6,8 +6,8 @@ import { firstValueFrom } from 'rxjs';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Prisma } from '@prisma/client';
 
-export type MonitorWithUser = Prisma.MonitorGetPayload<{
-  include: { user: true };
+export type MonitorWithTenant = Prisma.MonitorGetPayload<{
+  include: { tenant: { include: { users: true } } };
 }>;
 
 @Injectable()
@@ -20,7 +20,7 @@ export class MonitorEngineExecutor {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  async executeJob(monitor: MonitorWithUser) {
+  async executeJob(monitor: MonitorWithTenant) {
     const controller = new AbortController();
 
     const timeOutId = setTimeout(
@@ -81,7 +81,8 @@ export class MonitorEngineExecutor {
         name: monitor.name,
         statusCode,
         errorMessage,
-        userEmail: monitor.user.email,
+        userEmails: monitor.tenant.users.map((u) => u.email),
+        tenantId: monitor.tenantId,
       });
     } else if (currentState === 'DOWN') {
       this.eventEmitter.emit('monitor.down', {
@@ -90,7 +91,8 @@ export class MonitorEngineExecutor {
         name: monitor.name,
         statusCode,
         errorMessage,
-        userEmail: monitor.user.email,
+        userEmails: monitor.tenant.users.map((u) => u.email),
+        tenantId: monitor.tenantId,
       });
     } else {
       this.logger.log(
@@ -109,7 +111,7 @@ export class MonitorEngineExecutor {
   }
 
   private async saveResultAndUpdateMonitor(
-    monitor: MonitorWithUser,
+    monitor: MonitorWithTenant,
     statusCode: number | null,
     responseTime: number,
     success: boolean,

@@ -14,6 +14,15 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         }
         return null;
       },
+
+    /*  jwtFromRequest: (req: Request) => {
+        return (
+          (req?.cookies?.accessToken as string) ||
+          req?.headers?.authorization?.split(' ')[1] ||
+          null
+        );
+      },*/
+
       ignoreExpiration: false,
       secretOrKey: process.env.JWT_ACCESS_SECRET!,
     });

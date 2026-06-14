@@ -30,43 +30,43 @@ export class MonitorController {
   create(
     @Body()
     dto: createMonitorDto.CreateMonitorDto,
-    @GetUser('sub') userId: string,
+    @GetUser('tenantId') tenantId: string,
   ) {
-    return this.monitorService.create(dto, userId);
+    return this.monitorService.create(dto, tenantId);
   }
 
   @Get()
   findManyByUserId(
-    @GetUser('sub') userId: string,
+    @GetUser('tenantId') tenantId: string,
     @Query('page') page: number,
     @Query('limit') limit: number,
     @Query('search') search?: string,
   ) {
-    return this.monitorService.findManyByUserId(userId, page, limit, search);
+    return this.monitorService.findManyByUserId(tenantId, page, limit, search);
   }
 
   @Get(':id')
-  findOneById(@Param('id') id: string, @GetUser('sub') userId: string) {
-    return this.monitorService.findOneById(id, userId);
+  findOneById(@Param('id') id: string, @GetUser('tenantId') tenantId: string) {
+    return this.monitorService.findOneById(id, tenantId);
   }
 
   @Patch(':id')
   @UsePipes(new ZodValidationPipe(createMonitorDto.UpdateMonitorSchema))
   update(
     @Param('id') id: string,
-    @GetUser('sub') userId: string,
+    @GetUser('tenantId') tenantId: string,
     @Body() dto: createMonitorDto.UpdateMonitorDto,
   ) {
-    return this.monitorService.update(id, userId, dto);
+    return this.monitorService.update(id, tenantId, dto);
   }
 
   @Delete(':id')
-  softDelete(@Param('id') id: string, @GetUser('sub') userId: string) {
-    return this.monitorService.softDelete(id, userId);
+  softDelete(@Param('id') id: string, @GetUser('tenantId') tenantId: string) {
+    return this.monitorService.softDelete(id, tenantId);
   }
 
   @Get('analytics/kpi')
-  getKpiAnalytics(@GetUser('sub') userId: string) {
-    return this.analyticsService.getDashboardKpiAnalytics(userId);
+  getKpiAnalytics(@GetUser('tenantId') tenantId: string) {
+    return this.analyticsService.getDashboardKpiAnalytics(tenantId);
   }
 }

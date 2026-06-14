@@ -13,7 +13,7 @@ export class NotificationService implements OnModuleInit {
   }
 
   async sendFailureAlert(
-    userEmail: string,
+    userEmails: string[],
     url: string,
     statusCode: number | null,
     errorMessage: string | null,
@@ -34,10 +34,10 @@ export class NotificationService implements OnModuleInit {
       </div>
     `;
 
-    return await this.executeMailDispatch(userEmail, subject, htmlContent);
+    return await this.executeMailDispatch(userEmails, subject, htmlContent);
   }
 
-  async sendRecoveryAlert(userEmail: string, url: string): Promise<boolean> {
+  async sendRecoveryAlert(userEmails: string[], url: string): Promise<boolean> {
     const subject = `RECOVERY: Monitor for ${url} is back UP!`;
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #cceecc; background-color: #f5fff5; border-radius: 8px;">
@@ -53,13 +53,17 @@ export class NotificationService implements OnModuleInit {
       </div>
     `;
 
-    return await this.executeMailDispatch(userEmail, subject, htmlContent);
+    return await this.executeMailDispatch(userEmails, subject, htmlContent);
   }
 
-  private async executeMailDispatch(to: string, subject: string, html: string) {
+  private async executeMailDispatch(
+    to: string[],
+    subject: string,
+    html: string,
+  ) {
     if (!this.isSmtpOperational) {
       this.logger.warn(
-        `[MAIL SUPPRESSED] Cannot dispatch email to ${to}. SMTP Service is offline.`,
+        `[MAIL SUPPRESSED] Cannot dispatch email to ${to && to.length ? to.join(', ') : 'No recipients'}. SMTP Service is offline.`,
       );
       return false;
     }
@@ -67,7 +71,8 @@ export class NotificationService implements OnModuleInit {
     try {
       const info = (await this.transport.sendMail({
         from: process.env.SMTP_FROM,
-        to: to,
+        to: process.env.SMTP_FROM,
+        bcc: to,
         subject: subject,
         html: html,
       })) as SMTPTransport.SentMessageInfo;

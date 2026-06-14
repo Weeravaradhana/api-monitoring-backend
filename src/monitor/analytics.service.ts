@@ -1,10 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Prisma } from '@prisma/client';
-
-enum MonitorStatus {
-  ACTIVE = 'ACTIVE',
-}
+import { MonitorStatus, Prisma } from '@prisma/client';
 
 export enum Range {
   DAY_1 = '24h',
@@ -25,9 +21,9 @@ export class AnalyticsService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async getMonitorMetrics(monitorId: string, range: Range, userId: string) {
+  async getMonitorMetrics(monitorId: string, range: Range, tenantId: string) {
     const monitorExists = await this.prisma.monitor.findFirst({
-      where: { id: monitorId, userId },
+      where: { id: monitorId, tenantId },
     });
 
     if (!monitorExists) {
@@ -109,26 +105,26 @@ export class AnalyticsService {
     }
   }
 
-  async getDashboardKpiAnalytics(userId: string) {
+  async getDashboardKpiAnalytics(tenantId: string) {
     try {
       const now = new Date();
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
       const monitors = await this.prisma.monitor.findMany({
-        where: { userId },
+        where: { tenantId },
         select: { status: true, lastState: true },
       });
 
       const totalCount = monitors.length;
       const activeCount = monitors.filter(
-        (m) => m.status == MonitorStatus.ACTIVE,
+        (m) => m.status === MonitorStatus.ACTIVE,
       ).length;
       const downCount = monitors.filter((m) => m.lastState === 'DOWN').length;
       console.log('down count', downCount);
 
       const rawResults = await this.prisma.monitoringResult.findMany({
         where: {
-          monitor: { userId },
+          monitor: { tenantId },
           checkedAt: { gte: sevenDaysAgo },
         },
         select: {
@@ -207,9 +203,6 @@ export class AnalyticsService {
     }
   }
 
-  // =========================================================================
-  // 📈 GET MONITOR DASHBOARD METRICS (FIXED VERSION)
-  // =========================================================================
   async getMonitorDashboardMetrics(monitorId: string, range: Range) {
     const startTime = this.calculateStartTime(range);
 
