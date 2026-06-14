@@ -83,6 +83,15 @@ export class MonitorEngineExecutor {
         errorMessage,
         userEmail: monitor.user.email,
       });
+    } else if (currentState === 'DOWN') {
+      this.eventEmitter.emit('monitor.down', {
+        monitorId: monitor.id,
+        url: monitor.url,
+        name: monitor.name,
+        statusCode,
+        errorMessage,
+        userEmail: monitor.user.email,
+      });
     } else {
       this.logger.log(
         `[DEDUPLICATED] Monitor '${monitor.name}' remains ${currentState}. Alert suppressed.`,
@@ -109,6 +118,9 @@ export class MonitorEngineExecutor {
   ) {
     const now = new Date();
     const nextRunAt = new Date(now.getTime() + monitor.interval * 1000);
+    const lastNotificationAtUpdate = success
+      ? null
+      : monitor.lastNotificationaAt;
 
     try {
       await this.prisma.$transaction([
@@ -127,6 +139,7 @@ export class MonitorEngineExecutor {
           data: {
             nextRunAt,
             lastState: currentState,
+            lastNotificationaAt: lastNotificationAtUpdate,
           },
         }),
       ]);
