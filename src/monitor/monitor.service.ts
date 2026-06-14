@@ -20,16 +20,21 @@ export class MonitorService {
   }
 
   async findManyByUserId(
-    userId: string,
+    tenantId: string,
     page: number,
     limit: number,
     search?: string,
   ) {
-    return await this.monitorRepo.findManyByUserId(userId, page, limit, search);
+    return await this.monitorRepo.findManyByUserId(
+      tenantId,
+      page,
+      limit,
+      search,
+    );
   }
 
-  async findOneById(id: string, userId: string) {
-    const monitor = await this.monitorRepo.findOneById(id, userId);
+  async findOneById(id: string, tenantId: string) {
+    const monitor = await this.monitorRepo.findOneById(id, tenantId);
 
     if (!monitor) {
       throw new NotFoundException(
@@ -40,9 +45,9 @@ export class MonitorService {
     return monitor;
   }
 
-  async update(id: string, userId: string, dto: UpdateMonitorDto) {
+  async update(id: string, tenantId: string, dto: UpdateMonitorDto) {
     this.validatorUrlSecurity(dto.url!);
-    const result = await this.monitorRepo.update(id, userId, dto);
+    const result = await this.monitorRepo.update(id, tenantId, dto);
 
     if (result.count === 0) {
       throw new NotFoundException(
@@ -52,8 +57,8 @@ export class MonitorService {
     return { success: true, message: 'Monitor update successfully' };
   }
 
-  async softDelete(id: string, userId: string) {
-    const result = await this.monitorRepo.softDelete(id, userId);
+  async softDelete(id: string, tenantId: string) {
+    const result = await this.monitorRepo.softDelete(id, tenantId);
 
     if (result.count === 0) {
       throw new NotFoundException(
