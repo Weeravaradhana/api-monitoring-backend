@@ -65,6 +65,7 @@ export class AuthService {
         tenant: {
           create: {
             name: `${dto.firstName || 'Personal'}'s Workspace`,
+            slug: '',
             type: 'PERSONAL',
           },
         },
