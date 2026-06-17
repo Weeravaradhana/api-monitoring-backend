@@ -5,6 +5,7 @@ import { MonitorEngineModule } from './monitor-engine/monitor-engine.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AuthModule } from './auth/auth.module';
 import { NotificationModule } from './notification/notification.module';
+import { TenantModule } from './tenant/tenant.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { NotificationModule } from './notification/notification.module';
     MonitorEngineModule,
     NotificationModule,
     AuthModule,
+    TenantModule,
   ],
   controllers: [],
   providers: [],
