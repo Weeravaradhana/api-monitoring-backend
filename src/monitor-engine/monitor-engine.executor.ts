@@ -7,7 +7,17 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Prisma } from '@prisma/client';
 
 export type MonitorWithTenant = Prisma.MonitorGetPayload<{
-  include: { tenant: { include: { users: true } } };
+  include: {
+    tenant: {
+      include: {
+        members: {
+          include: {
+            user: true;
+          };
+        };
+      };
+    };
+  };
 }>;
 
 @Injectable()
@@ -70,6 +80,10 @@ export class MonitorEngineExecutor {
     const currentState = success ? 'UP' : 'DOWN';
     const previousState = monitor.lastState;
 
+    const userEmails = monitor.tenant.members
+      .map((m) => m.user?.email)
+      .filter((email): email is string => !!email);
+
     if (previousState !== currentState) {
       this.logger.warn(
         `[STATE TRANSITION] Monitor '${monitor.name}' changed from ${previousState} to ${currentState}!`,
@@ -81,7 +95,7 @@ export class MonitorEngineExecutor {
         name: monitor.name,
         statusCode,
         errorMessage,
-        userEmails: monitor.tenant.users.map((u) => u.email),
+        userEmails,
         tenantId: monitor.tenantId,
       });
     } else if (currentState === 'DOWN') {
@@ -91,7 +105,7 @@ export class MonitorEngineExecutor {
         name: monitor.name,
         statusCode,
         errorMessage,
-        userEmails: monitor.tenant.users.map((u) => u.email),
+        userEmails,
         tenantId: monitor.tenantId,
       });
     } else {
@@ -122,7 +136,7 @@ export class MonitorEngineExecutor {
     const nextRunAt = new Date(now.getTime() + monitor.interval * 1000);
     const lastNotificationAtUpdate = success
       ? null
-      : monitor.lastNotificationaAt;
+      : monitor.lastNotificationAt;
 
     try {
       await this.prisma.$transaction([
@@ -141,7 +155,7 @@ export class MonitorEngineExecutor {
           data: {
             nextRunAt,
             lastState: currentState,
-            lastNotificationaAt: lastNotificationAtUpdate,
+            lastNotificationAt: lastNotificationAtUpdate,
           },
         }),
       ]);
