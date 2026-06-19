@@ -6,6 +6,9 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AuthModule } from './auth/auth.module';
 import { NotificationModule } from './notification/notification.module';
 import { TenantModule } from './tenant/tenant.module';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
+import { TenantLoggingInterceptor } from './interceptors/tenant-login-interceptor';
 
 @Module({
   imports: [
@@ -22,6 +25,15 @@ import { TenantModule } from './tenant/tenant.module';
     TenantModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: TenantLoggingInterceptor,
+    },
+  ],
 })
 export class AppModule {}
