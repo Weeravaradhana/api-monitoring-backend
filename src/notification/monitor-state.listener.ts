@@ -24,17 +24,19 @@ export class MonitorStateListener {
 
     const monitor = await this.prisma.monitor.findUnique({
       where: { id: payload.monitorId },
-      include: { tenant: { include: { users: true } } },
+      include: {
+        tenant: { include: { members: { include: { user: true } } } },
+      },
     });
 
-    if (!monitor || !monitor.tenant.users) return;
+    if (!monitor || !monitor.tenant.members.length) return;
 
     const now = new Date();
 
     const COOL_DOWN_MINUTES = 15;
-    if (monitor.lastNotificationaAt) {
+    if (monitor.lastNotificationAt) {
       const timeSinceLastAlert =
-        (now.getTime() - monitor.lastNotificationaAt.getTime()) / 1000 / 60;
+        (now.getTime() - monitor.lastNotificationAt.getTime()) / 1000 / 60;
       if (timeSinceLastAlert < COOL_DOWN_MINUTES) {
         this.logger.warn(
           `[ALERT THROTTLED] Anti-Spam active. Last alert was ${Math.round(timeSinceLastAlert)}m ago. Skipping.`,
@@ -43,10 +45,24 @@ export class MonitorStateListener {
       }
     }
 
-    const targetEmail = monitor.tenant.users.map((e) => e.email);
+    const activeUsers = monitor.tenant.members
+      .map((m) => m.user)
+      .filter(
+        (u): u is typeof u & { email: string } =>
+          !!u && (!u.alertsMutedUntil || u.alertsMutedUntil <= now),
+      );
+
+    if (activeUsers.length === 0) {
+      this.logger.warn(
+        `[ALERT MUTED] All users in this workspace have muted alerts. Skipping email.`,
+      );
+      return;
+    }
+
+    const targetEmails = activeUsers.map((u) => u.email);
 
     const isSuccess = await this.notificationService.sendFailureAlert(
-      targetEmail,
+      targetEmails,
       payload.url,
       payload.statusCode,
       payload.errorMessage,
@@ -55,13 +71,13 @@ export class MonitorStateListener {
     await this.prisma.$transaction([
       this.prisma.monitor.update({
         where: { id: payload.monitorId },
-        data: { lastNotificationaAt: now },
+        data: { lastNotificationAt: now },
       }),
       this.prisma.notificationLog.create({
         data: {
           monitorId: payload.monitorId,
           stateSent: 'DOWN',
-          sentTo: targetEmail.join(', '),
+          sentTo: targetEmails.join(', '),
           success: isSuccess,
           errorMessage: isSuccess ? null : 'SMTP Dispatch Failure',
         },
@@ -79,15 +95,28 @@ export class MonitorStateListener {
 
     const monitor = await this.prisma.monitor.findUnique({
       where: { id: payload.monitorId },
-      include: { tenant: { include: { users: true } } },
+      include: {
+        tenant: {
+          include: {
+            members: {
+              include: {
+                user: true,
+              },
+            },
+          },
+        },
+      },
     });
 
-    if (!monitor || !monitor.tenant || !monitor.tenant.users.length) return;
+    if (!monitor || !monitor.tenant || !monitor.tenant.members.length) return;
 
     const now = new Date();
-    const activeUsers = monitor.tenant.users.filter(
-      (user) => !user.alertsMutedUntil || user.alertsMutedUntil <= now,
-    );
+    const activeUsers = monitor.tenant.members
+      .map((m) => m.user)
+      .filter(
+        (u): u is typeof u & { email: string } =>
+          !!u && (!u.alertsMutedUntil || u.alertsMutedUntil <= now),
+      );
 
     if (activeUsers.length === 0) {
       this.logger.warn(
@@ -106,7 +135,7 @@ export class MonitorStateListener {
     await this.prisma.$transaction([
       this.prisma.monitor.update({
         where: { id: payload.monitorId },
-        data: { lastNotificationaAt: null },
+        data: { lastNotificationAt: null },
       }),
       this.prisma.notificationLog.create({
         data: {
