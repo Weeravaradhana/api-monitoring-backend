@@ -26,6 +26,12 @@ enum Role {
   ADMIN
 }
 
+enum TenantRole {
+  OWNER
+  MEMBER
+  VIEWER
+}
+
 enum MonitorStatus {
   ACTIVE
   PAUSED
@@ -45,7 +51,7 @@ model Tenant {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
-  users    User[]
+  members  TenantMember[]
   monitors Monitor[]
 }
 
@@ -65,12 +71,23 @@ model User {
   refreshTokens    RefreshToken[]
   otpVerifications OtpVerification[]
   passwordResets   PasswordResetToken[]
-
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenants          TenantMember[]
 
   @@index([email])
+}
+
+model TenantMember {
+  tenantId  String
+  userId    String
+  role      TenantRole @default(MEMBER)
+  joinedAt  DateTime   @default(now())
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, userId])
   @@index([tenantId])
+  @@index([userId])
 }
 
 model RefreshToken {
@@ -124,7 +141,7 @@ model Monitor {
   updatedAt DateTime      @updatedAt
   lastState String        @default("UP")
 
-  lastNotificationaAt DateTime?
+  lastNotificationAt DateTime?
   notifyEmail         String?
 
   tenantId         String
@@ -137,6 +154,7 @@ model Monitor {
 }
 
 model MonitoringResult {
+  id           String  @id @default(uuid())
   monitorId    String
   statusCode   Int?     @db.SmallInt
   responseTime Int
@@ -145,8 +163,7 @@ model MonitoringResult {
   checkedAt    DateTime @default(now())
 
   monitor Monitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
-
-  @@id([monitorId, checkedAt])
+  
   @@index([monitorId, checkedAt(sort: Desc)])
 }
 
