@@ -23,8 +23,6 @@ import * as jwtPayloadInterface from './interface/jwt-payload.interface';
 import { UpdateMuteSettingsDto } from './dto/update-mute-setting.dto';
 import { Public } from './decorators/public.decorator';
 import { SwitchTenantDto } from './dto/switch-tenant.dto';
-import * as authenticationRequest from '../types/authentication-request';
-import { CookieUtil } from '../utils/cookie-cookie.util';
 import express from 'express';
 
 interface JwtUser {
@@ -62,7 +60,6 @@ class AuthController {
   @UseGuards(JwtAuthGuard)
   getMe(@GetUser() user: JwtUser) {
     if (!user) {
-      console.log('HELLO USER', user);
       throw new UnauthorizedException();
     }
 
@@ -114,20 +111,29 @@ class AuthController {
   }
 
   @Post('switch-tenant')
+  @UseGuards(JwtAuthGuard)
   async switchTenant(
     @Body() dto: SwitchTenantDto,
-    @Req() req: authenticationRequest.AuthenticatedRequest,
+    @GetUser() user: JwtUser,
     @Res({ passthrough: true }) response: express.Response,
   ) {
-    if (!req.user) {
+    if (!user) {
       throw new UnauthorizedException();
     }
-    const { accessToken } = await this.authService.switchTenant(
-      req.user.userId,
+    const accessToken  = await this.authService.switchTenant(
+      user.sub,
       dto.tenantId,
     );
-    CookieUtil.setAuthCookie(response, accessToken);
-    return { message: 'Workspace switched successfully' };
+
+    response.cookie('accessToken', accessToken.accessToken.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 15 * 60 * 1000,
+      path: '/',
+    });
+
+    return { success: true };
   }
 }
 
