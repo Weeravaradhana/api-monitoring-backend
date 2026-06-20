@@ -6,6 +6,8 @@ import {
   Post,
   Query,
   Req,
+  Res,
+  UnauthorizedException,
   UseGuards,
   UsePipes,
   ValidationPipe,
@@ -17,13 +19,22 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { GetUser } from './decorators/get-user.decorator';
-import express from 'express';
 import * as jwtPayloadInterface from './interface/jwt-payload.interface';
 import { UpdateMuteSettingsDto } from './dto/update-mute-setting.dto';
 import { Public } from './decorators/public.decorator';
+import { SwitchTenantDto } from './dto/switch-tenant.dto';
+import * as authenticationRequest from '../types/authentication-request';
+import { CookieUtil } from '../utils/cookie-cookie.util';
+import express from 'express';
+
+interface JwtUser {
+  sub: string;
+  tenantId: string;
+  role: string;
+}
 
 @Controller('auth')
-export class AuthController {
+class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
@@ -45,6 +56,21 @@ export class AuthController {
   @UsePipes(new ValidationPipe({ whitelist: true }))
   async login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  getMe(@GetUser() user: JwtUser) {
+    if (!user) {
+      console.log('HELLO USER', user);
+      throw new UnauthorizedException();
+    }
+
+    return {
+      userId: user.sub,
+      tenantId: user.tenantId,
+      role: user.role,
+    };
   }
 
   @Post('refresh')
@@ -86,4 +112,23 @@ export class AuthController {
       dto.alertsMutedUntil,
     );
   }
+
+  @Post('switch-tenant')
+  async switchTenant(
+    @Body() dto: SwitchTenantDto,
+    @Req() req: authenticationRequest.AuthenticatedRequest,
+    @Res({ passthrough: true }) response: express.Response,
+  ) {
+    if (!req.user) {
+      throw new UnauthorizedException();
+    }
+    const { accessToken } = await this.authService.switchTenant(
+      req.user.userId,
+      dto.tenantId,
+    );
+    CookieUtil.setAuthCookie(response, accessToken);
+    return { message: 'Workspace switched successfully' };
+  }
 }
+
+export default AuthController;
