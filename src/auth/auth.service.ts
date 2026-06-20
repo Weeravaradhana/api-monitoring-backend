@@ -341,4 +341,43 @@ export class AuthService {
       },
     });
   }
+
+  async switchTenant(userId: string, newTenantId: string) {
+    const membership = await this.prisma.tenantMember.findUnique({
+      where: {
+        tenantId_userId: {
+          tenantId: newTenantId,
+          userId: userId,
+        },
+      },
+    });
+
+    if (!membership) {
+      throw new UnauthorizedException(
+        'You do not have access to this workspace',
+      );
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const accessToken = await this.generateAccessToken(
+      user.id,
+      newTenantId,
+      user.role,
+    );
+
+    return { accessToken };
+  }
+
+  private async generateAccessToken(
+    userId: string,
+    tenantId: string,
+    role: string,
+  ): Promise<string> {
+    const payload = { sub: userId, tenantId, role };
+    return this.jwtService.signAsync(payload);
+  }
 }
