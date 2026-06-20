@@ -363,21 +363,15 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
-    const accessToken = await this.generateAccessToken(
-      user.id,
-      newTenantId,
-      user.role,
-    );
+    const tokenData: TokenGenerateDto = {
+      userId: userId,
+      email: user.email,
+      role: membership.role,
+      tenantId: newTenantId,
+    };
+
+    const accessToken = await this.generateToken(tokenData);
 
     return { accessToken };
-  }
-
-  private async generateAccessToken(
-    userId: string,
-    tenantId: string,
-    role: string,
-  ): Promise<string> {
-    const payload = { sub: userId, tenantId, role };
-    return this.jwtService.signAsync(payload);
   }
 }
