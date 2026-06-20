@@ -9,6 +9,9 @@ import { TenantModule } from './tenant/tenant.module';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { TenantLoggingInterceptor } from './interceptors/tenant-login-interceptor';
+import { PresenceController } from './presence/presence.controller';
+import { PresenceService } from './presence/presence.service';
+import PresenceGateway from './presence/presence.gateway';
 
 @Module({
   imports: [
@@ -24,7 +27,7 @@ import { TenantLoggingInterceptor } from './interceptors/tenant-login-intercepto
     AuthModule,
     TenantModule,
   ],
-  controllers: [],
+  controllers: [PresenceController],
   providers: [
     {
       provide: APP_GUARD,
@@ -34,6 +37,8 @@ import { TenantLoggingInterceptor } from './interceptors/tenant-login-intercepto
       provide: APP_INTERCEPTOR,
       useClass: TenantLoggingInterceptor,
     },
+    PresenceService,
+    PresenceGateway,
   ],
 })
 export class AppModule {}
