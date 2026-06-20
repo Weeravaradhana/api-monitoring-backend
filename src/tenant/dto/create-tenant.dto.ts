@@ -1,4 +1,12 @@
-import { IsString, IsNotEmpty, Matches, Length } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  Matches,
+  Length,
+  IsEmail,
+  IsOptional,
+  IsArray,
+} from 'class-validator';
 
 export class CreateTenantDto {
   @IsString()
@@ -13,4 +21,9 @@ export class CreateTenantDto {
       'Slug must be lowercase alphanumeric and dashes only (e.g., travel-ease)',
   })
   slug: string;
+
+  @IsArray()
+  @IsOptional()
+  @IsEmail({}, { each: true })
+  memberEmails?: string[];
 }
