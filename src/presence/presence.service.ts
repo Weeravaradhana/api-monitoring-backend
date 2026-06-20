@@ -6,7 +6,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 
-interface TenantMemberDTO {
+export interface TenantMemberDTO {
   id: string;
   name: string;
   email: string;
