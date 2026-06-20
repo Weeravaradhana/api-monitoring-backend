@@ -77,13 +77,14 @@ model User {
 }
 
 model TenantMember {
-  tenantId  String
-  userId    String
-  role      TenantRole @default(MEMBER)
-  joinedAt  DateTime   @default(now())
+  tenantId String
+  userId   String
+  role     TenantRole @default(MEMBER)
+  joinedAt DateTime   @default(now())
+  isOnline Boolean    @default(false) @map("is_online")
 
-  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([tenantId, userId])
   @@index([tenantId])
@@ -142,7 +143,7 @@ model Monitor {
   lastState String        @default("UP")
 
   lastNotificationAt DateTime?
-  notifyEmail         String?
+  notifyEmail        String?
 
   tenantId         String
   tenant           Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -154,7 +155,7 @@ model Monitor {
 }
 
 model MonitoringResult {
-  id           String  @id @default(uuid())
+  id           String   @id @default(uuid())
   monitorId    String
   statusCode   Int?     @db.SmallInt
   responseTime Int
@@ -163,7 +164,7 @@ model MonitoringResult {
   checkedAt    DateTime @default(now())
 
   monitor Monitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
-  
+
   @@index([monitorId, checkedAt(sort: Desc)])
 }
 
