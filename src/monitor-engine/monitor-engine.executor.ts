@@ -7,7 +7,17 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Prisma } from '@prisma/client';
 
 export type MonitorWithTenant = Prisma.MonitorGetPayload<{
-  include: { tenant: { include: { users: true } } };
+  include: {
+    tenant: {
+      include: {
+        members: {
+          include: {
+            user: true;
+          };
+        };
+      };
+    };
+  };
 }>;
 
 @Injectable()
@@ -70,6 +80,9 @@ export class MonitorEngineExecutor {
     const currentState = success ? 'UP' : 'DOWN';
     const previousState = monitor.lastState;
 
+    const userEmails = monitor.tenant.members
+      .map((m) => m.user?.email)
+      .filter((email): email is string => !!email);
     await this.saveResultAndUpdateMonitor(
       monitor,
       statusCode,
@@ -90,7 +103,7 @@ export class MonitorEngineExecutor {
         name: monitor.name,
         statusCode,
         errorMessage,
-        userEmails: monitor.tenant.users.map((u) => u.email),
+        userEmails,
         tenantId: monitor.tenantId,
       });
     } else if (currentState === 'DOWN') {
@@ -100,7 +113,7 @@ export class MonitorEngineExecutor {
         name: monitor.name,
         statusCode,
         errorMessage,
-        userEmails: monitor.tenant.users.map((u) => u.email),
+        userEmails,
         tenantId: monitor.tenantId,
       });
     } else {
@@ -129,13 +142,19 @@ export class MonitorEngineExecutor {
   ) {
     const now = new Date();
     const nextRunAt = new Date(now.getTime() + monitor.interval * 1000);
+
+    const lastNotificationAtUpdate = success
+      ? null
+      : monitor.lastNotificationAt;
+
     const updateData: Prisma.MonitorUpdateInput = {
       nextRunAt,
       lastState: currentState,
+      lastNotificationAt: lastNotificationAtUpdate,
     };
 
     if (success) {
-      updateData.lastNotificationaAt = null;
+      updateData.lastNotificationAt = null;
     }
 
     try {
@@ -152,6 +171,7 @@ export class MonitorEngineExecutor {
         }),
         this.prisma.monitor.update({
           where: { id: monitor.id },
+
           data: updateData,
         }),
       ]);

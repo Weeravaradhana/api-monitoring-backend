@@ -5,6 +5,13 @@ import { MonitorEngineModule } from './monitor-engine/monitor-engine.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AuthModule } from './auth/auth.module';
 import { NotificationModule } from './notification/notification.module';
+import { TenantModule } from './tenant/tenant.module';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
+import { TenantLoggingInterceptor } from './interceptors/tenant-login-interceptor';
+import { PresenceController } from './presence/presence.controller';
+import { PresenceService } from './presence/presence.service';
+import PresenceGateway from './presence/presence.gateway';
 
 @Module({
   imports: [
@@ -18,8 +25,20 @@ import { NotificationModule } from './notification/notification.module';
     MonitorEngineModule,
     NotificationModule,
     AuthModule,
+    TenantModule,
   ],
-  controllers: [],
-  providers: [],
+  controllers: [PresenceController],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: TenantLoggingInterceptor,
+    },
+    PresenceService,
+    PresenceGateway,
+  ],
 })
 export class AppModule {}

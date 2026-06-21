@@ -1,8 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -24,6 +22,12 @@ enum Role {
   USER
   ORGANIZER
   ADMIN
+}
+
+enum TenantRole {
+  OWNER
+  MEMBER
+  VIEWER
 }
 
 enum MonitorStatus {
@@ -64,40 +68,49 @@ model SlackConfig {
 }
 
 model Tenant {
-  id        String     @id @default(uuid())
-  name      String     @db.VarChar(255)
-  type      TenantType @default(PERSONAL)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-
-  users       User[]
-  monitors    Monitor[]
-  webhooks    WebhookConfig[]
-  slackConfig SlackConfig?
+  id             String          @id @default(uuid())
+  name           String          @db.VarChar(255)
+  slug           String          @unique @db.VarChar(100)
+  type           TenantType      @default(PERSONAL)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  members        TenantMember[]
+  monitors       Monitor[]
+  webhookConfigs WebhookConfig[]
+  slackConfig    SlackConfig?
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  firstName    String?
-  lastName     String?
-  role         Role     @default(ORGANIZER)
-  isVerified   Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
+  id               String               @id @default(uuid())
+  email            String               @unique
+  passwordHash     String
+  firstName        String?
+  lastName         String?
+  role             Role                 @default(ORGANIZER)
+  isVerified       Boolean              @default(false)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
   alertsMutedUntil DateTime?
-
   refreshTokens    RefreshToken[]
   otpVerifications OtpVerification[]
   passwordResets   PasswordResetToken[]
-
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenants          TenantMember[]
 
   @@index([email])
+}
+
+model TenantMember {
+  tenantId String
+  userId   String
+  role     TenantRole @default(MEMBER)
+  joinedAt DateTime   @default(now())
+  isOnline Boolean    @default(false) @map("is_online")
+  tenant   Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, userId])
   @@index([tenantId])
+  @@index([userId])
 }
 
 model RefreshToken {
@@ -137,43 +150,40 @@ model PasswordResetToken {
 }
 
 model Monitor {
-  id        String        @id @default(uuid())
-  name      String        @db.VarChar(255)
-  url       String        @db.Text
-  method    HttpMethod    @default(GET)
-  interval  Int           @default(60)
-  timeout   Int           @default(30)
-  headers   Json          @default("{}")
-  body      String?       @db.Text
-  status    MonitorStatus @default(ACTIVE)
-  nextRunAt DateTime      @default(now())
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  lastState String        @default("UP")
-
-  lastNotificationaAt DateTime?
-  notifyEmail         String?
-
-  tenantId         String
-  tenant           Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  results          MonitoringResult[]
-  notificationLogs NotificationLog[]
+  id                 String             @id @default(uuid())
+  name               String             @db.VarChar(255)
+  url                String             @db.Text
+  method             HttpMethod         @default(GET)
+  interval           Int                @default(60)
+  timeout            Int                @default(30)
+  headers            Json               @default("{}")
+  body               String?            @db.Text
+  status             MonitorStatus      @default(ACTIVE)
+  nextRunAt          DateTime           @default(now())
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  lastState          String             @default("UP")
+  lastNotificationAt DateTime?
+  notifyEmail        String?
+  tenantId           String
+  tenant             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  results            MonitoringResult[]
+  notificationLogs   NotificationLog[]
 
   @@index([tenantId])
   @@index([status, nextRunAt])
 }
 
 model MonitoringResult {
+  id           String   @id @default(uuid())
   monitorId    String
   statusCode   Int?     @db.SmallInt
   responseTime Int
   success      Boolean
   errorMessage String?  @db.Text
   checkedAt    DateTime @default(now())
+  monitor      Monitor  @relation(fields: [monitorId], references: [id], onDelete: Cascade)
 
-  monitor Monitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
-
-  @@id([monitorId, checkedAt])
   @@index([monitorId, checkedAt(sort: Desc)])
 }
 
@@ -185,8 +195,7 @@ model NotificationLog {
   sentAt       DateTime @default(now())
   success      Boolean  @default(true)
   errorMessage String?  @db.Text
-
-  monitor Monitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  monitor      Monitor  @relation(fields: [monitorId], references: [id], onDelete: Cascade)
 
   @@index([monitorId])
 }

@@ -33,7 +33,6 @@ export class AuthService {
     if (existingUser) {
       if (!existingUser.isVerified) {
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
         const hashOtp = crypto.createHash('sha256').update(otp).digest('hex');
 
         const redisKey = `otp:user:${existingUser.id}`;
@@ -54,45 +53,35 @@ export class AuthService {
     const saltRound = 10;
     const hashPassword = await bcrypt.hash(dto.password, saltRound);
 
-    const user = await this.prisma.user.create({
-      data: {
-        email: dto.email,
-        passwordHash: hashPassword,
-        firstName: dto.firstName,
-        lastName: dto.lastName,
-        role: 'ORGANIZER',
-
-        tenant: {
-          create: {
-            name: `${dto.firstName || 'Personal'}'s Workspace`,
-            type: 'PERSONAL',
-          },
+    try {
+      const newUser = await this.prisma.user.create({
+        data: {
+          email: dto.email,
+          passwordHash: hashPassword,
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          role: 'ORGANIZER',
         },
-      },
-      include: {
-        tenant: true,
-      },
-    });
+      });
 
-    const otp = Math.floor(1000 + Math.random() * 900000).toString();
+      const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 💡 Fixed to 6 digits consistency
+      const hashOtp = crypto.createHash('sha256').update(otp).digest('hex');
 
-    const hashOtp = crypto.createHash('sha256').update(otp).digest('hex');
+      const redisKey = `otp:user:${newUser.id}`;
+      await this.redis.set(redisKey, hashOtp, 'EX', 300);
 
-    const redisKey = `otp:user:${user.id}`;
-    await this.redis.set(redisKey, hashOtp, 'EX', 300);
-
-    console.log(`[PRODUCTION LOG] OTP for User ${user.email}: ${otp}`);
-
-    return {
-      message: 'Registration successful. Please verify your OTP.',
-      userId: user.id,
-      tenantId: user.tenantId,
-    };
+      console.log(`[PRODUCTION LOG] OTP for User ${newUser.email}: ${otp}`);
+      return {
+        message: 'Registration successful. Please verify your OTP.',
+        userId: newUser.id,
+      };
+    } catch (error) {
+      console.error('Transaction Failed! Rolling back...', error);
+      throw new Error('Registration failed due to a system error.');
+    }
   }
-
   async verifyOtp(dto: VerifyOtpDto) {
     const redisKey = `otp:user:${dto.userId}`;
-
     const storeHashOtp = await this.redis.get(redisKey);
 
     if (!storeHashOtp) {
@@ -108,17 +97,40 @@ export class AuthService {
       throw new BadRequestException('Invalid OTP code');
     }
 
-    await this.prisma.user.update({
-      where: { id: dto.userId },
-      data: { isVerified: true },
-    });
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const updatedUser = await this.prisma.user.update({
+          where: { id: dto.userId },
+          data: { isVerified: true },
+        });
 
-    await this.redis.del(redisKey);
+        const firstName = updatedUser.firstName ?? 'Default';
+        const newTenant = await tx.tenant.create({
+          data: {
+            name: `${updatedUser.firstName}'s Workspace`,
+            slug: `${firstName.toLowerCase()}-workspace`,
+          },
+        });
 
-    return {
-      success: true,
-      message: 'Account successfully verified. You can now log in',
-    };
+        await tx.tenantMember.create({
+          data: {
+            tenantId: newTenant.id,
+            userId: updatedUser.id,
+            role: 'OWNER',
+          },
+        });
+        await this.redis.del(redisKey);
+        return {
+          success: true,
+          message: 'Account successfully verified. You can now log in',
+          userId: updatedUser.id,
+          tenantId: newTenant.id,
+        };
+      });
+    } catch (error) {
+      console.error('Transaction Failed! Rolling back...', error);
+      throw new Error('Registration failed due to a system error.');
+    }
   }
 
   async generateToken(dto: TokenGenerateDto) {
@@ -181,11 +193,21 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    const userTenant = await this.prisma.tenantMember.findFirst({
+      where: { userId: user.id },
+    });
+
+    if (!userTenant) {
+      throw new BadRequestException(
+        'User is not assigned to any workspace. Contact admin.',
+      );
+    }
+
     const tokenCreateDetails: TokenGenerateDto = {
       userId: user.id,
       email: user.email,
       role: user.role,
-      tenantId: user.tenantId,
+      tenantId: userTenant.tenantId,
     };
     const tokens = await this.generateToken(tokenCreateDetails);
 
@@ -197,13 +219,12 @@ export class AuthService {
           id: user.id,
           email: user.email,
           role: user.role,
-          tenantId: user.tenantId,
         },
       },
     };
   }
 
-  async refreshToken(dto: RefreshTokenDto) {
+  async refreshToken(dto: RefreshTokenDto, tenantId: string) {
     const incomingTokenHash = crypto
       .createHash('sha256')
       .update(dto.refreshToken)
@@ -241,7 +262,7 @@ export class AuthService {
       userId: selectedUser.id,
       email: selectedUser.email,
       role: selectedUser.role,
-      tenantId: selectedUser.tenantId,
+      tenantId: tenantId,
     };
 
     const generatedTokens = await this.generateToken(tokenCreateDetails);
@@ -301,6 +322,17 @@ export class AuthService {
     };
   }
 
+  async searchUser(query: string) {
+    return this.prisma.user.findMany({
+      where: {
+        email: {
+          contains: query,
+          mode: 'insensitive',
+        },
+      },
+    });
+  }
+
   async updateMuteStatus(userId: string, alertsMutedUntil: string | null) {
     return this.prisma.user.update({
       where: { id: userId },
@@ -308,5 +340,38 @@ export class AuthService {
         alertsMutedUntil: alertsMutedUntil ? new Date(alertsMutedUntil) : null,
       },
     });
+  }
+
+  async switchTenant(userId: string, newTenantId: string) {
+    const membership = await this.prisma.tenantMember.findUnique({
+      where: {
+        tenantId_userId: {
+          tenantId: newTenantId,
+          userId: userId,
+        },
+      },
+    });
+
+    if (!membership) {
+      throw new UnauthorizedException(
+        'You do not have access to this workspace',
+      );
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const tokenData: TokenGenerateDto = {
+      userId: userId,
+      email: user.email,
+      role: membership.role,
+      tenantId: newTenantId,
+    };
+
+    const accessToken = await this.generateToken(tokenData);
+
+    return { accessToken };
   }
 }

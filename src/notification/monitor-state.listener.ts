@@ -23,7 +23,7 @@ export class MonitorStateListener {
     payload: monitorEventPayloadInterface.MonitorEventPayload,
   ) {
     this.logger.log(
-      `Received 'monitor.down' event for Monitor ID: ${payload.monitorId}. Processing alert...`,
+      `Processing 'monitor.down' for Monitor ID: ${payload.monitorId}.`,
     );
 
     const monitor = await this.prisma.monitor.findUnique({
@@ -31,45 +31,35 @@ export class MonitorStateListener {
       include: {
         tenant: {
           include: {
-            users: true,
-            webhooks: { where: { isActive: true } },
+            members: { include: { user: true } },
+            webhookConfigs: { where: { isActive: true } },
             slackConfig: true,
           },
         },
       },
     });
 
-    if (!monitor || !monitor.tenant || !monitor.tenant.users.length) return;
+    if (!monitor || !monitor.tenant.members.length) return;
 
     const now = new Date();
 
-    const activeUsers = monitor.tenant.users.filter(
-      (user) => !user.alertsMutedUntil || user.alertsMutedUntil <= now,
-    );
-
-    if (activeUsers.length === 0) {
-      this.logger.warn(
-        `[ALERT MUTED] All users in Tenant ${monitor.tenantId} have suppressed alerts. Skipping notification dispatch.`,
-      );
-      return;
-    }
-
-    const COOL_DOWN_MINUTES = 15;
-    if (monitor.lastNotificationaAt) {
+    if (monitor.lastNotificationAt) {
       const timeSinceLastAlert =
-        (now.getTime() - monitor.lastNotificationaAt.getTime()) / 1000 / 60;
-      if (timeSinceLastAlert < COOL_DOWN_MINUTES) {
-        this.logger.warn(
-          `[ALERT THROTTLED] Anti-Spam active. Last alert was ${Math.round(timeSinceLastAlert)}m ago. Skipping.`,
-        );
-        return;
-      }
+        (now.getTime() - monitor.lastNotificationAt.getTime()) / 1000 / 60;
+      if (timeSinceLastAlert < 15) return;
     }
 
+    const activeUsers = monitor.tenant.members
+      .map((m) => m.user)
+      .filter((u) => !!u && (!u.alertsMutedUntil || u.alertsMutedUntil <= now));
+
+    if (activeUsers.length === 0) return;
+
+    const targetEmails = activeUsers.map((u) => u.email);
     const promises: Promise<any>[] = [];
     const channelsExecuted: string[] = [];
 
-    const targetEmails = monitor.tenant.users.map((e) => e.email);
+    // Email Dispatch
     if (targetEmails.length > 0) {
       channelsExecuted.push(`EMAIL (${targetEmails.length})`);
       promises.push(
@@ -82,6 +72,7 @@ export class MonitorStateListener {
       );
     }
 
+    // Webhook Dispatch
     const webhookPayload = {
       event: 'monitor.down',
       monitorId: payload.monitorId,
@@ -92,7 +83,7 @@ export class MonitorStateListener {
       timestamp: now.toISOString(),
     };
 
-    monitor.tenant.webhooks.forEach((webhook) => {
+    monitor.tenant.webhookConfigs.forEach((webhook) => {
       channelsExecuted.push(`WEBHOOK (${webhook.url})`);
       promises.push(
         this.webhookService.dispatchWebhook(
@@ -103,49 +94,39 @@ export class MonitorStateListener {
       );
     });
 
-    if (monitor.tenant.slackConfig && monitor.tenant.slackConfig.isActive) {
+    // Slack Dispatch
+    if (monitor.tenant.slackConfig?.isActive) {
       channelsExecuted.push(
-        `SLACK (${monitor.tenant.slackConfig.channelName || 'Webhook'})`,
+        `SLACK (${monitor.tenant.slackConfig.channelName || 'Channel'})`,
       );
       promises.push(
         this.slackService.sendSlackAlert(
           monitor.tenant.slackConfig.webhookUrl,
           'DOWN',
           payload.url,
-          payload.errorMessage ||
-            `HTTP Status Code: ${payload.statusCode || 'N/A'}`,
+          payload.errorMessage || `Status: ${payload.statusCode || 'N/A'}`,
         ),
       );
     }
 
     const results = await Promise.allSettled(promises);
-    let emailSuccess = true;
-
-    results.forEach((res, index) => {
-      if (res.status === 'rejected') {
-        this.logger.error(
-          `Notification Channel [${channelsExecuted[index]}] failed to dispatch:`,
-          res.reason,
-        );
-        if (channelsExecuted[index].startsWith('EMAIL')) {
-          emailSuccess = false;
-        }
-      }
+    let success = true;
+    results.forEach((res) => {
+      if (res.status === 'rejected') success = false;
     });
+
     await this.prisma.$transaction([
       this.prisma.monitor.update({
         where: { id: payload.monitorId },
-        data: { lastNotificationaAt: now },
+        data: { lastNotificationAt: now },
       }),
       this.prisma.notificationLog.create({
         data: {
           monitorId: payload.monitorId,
           stateSent: 'DOWN',
           sentTo: `Channels: [${channelsExecuted.join(' | ')}]`,
-          success: emailSuccess,
-          errorMessage: emailSuccess
-            ? null
-            : 'Multi-channel dispatch completed with errors. See logs.',
+          success,
+          errorMessage: success ? null : 'Some channels failed.',
         },
       }),
     ]);
@@ -155,112 +136,34 @@ export class MonitorStateListener {
   async handleMonitorUpEvent(
     payload: monitorEventPayloadInterface.MonitorEventPayload,
   ) {
-    this.logger.log(
-      `Received 'monitor.up' event for [${payload.name}]. Dispatching recovery alert...`,
-    );
+    this.logger.log(`Processing 'monitor.up' for [${payload.name}].`);
 
     const monitor = await this.prisma.monitor.findUnique({
       where: { id: payload.monitorId },
       include: {
         tenant: {
           include: {
-            users: true,
-            webhooks: { where: { isActive: true } },
+            members: { include: { user: true } },
+            webhookConfigs: { where: { isActive: true } },
             slackConfig: true,
           },
         },
       },
     });
 
-    if (!monitor || !monitor.tenant || !monitor.tenant.users.length) return;
+    if (!monitor || !monitor.tenant.members.length) return;
 
-    const now = new Date();
-    const activeUsers = monitor.tenant.users.filter(
-      (user) => !user.alertsMutedUntil || user.alertsMutedUntil <= now,
+    const targetEmails = monitor.tenant.members.map((m) => m.user.email);
+    const promises: Promise<any>[] = [];
+
+    promises.push(
+      this.notificationService.sendRecoveryAlert(targetEmails, payload.url),
     );
 
-    if (activeUsers.length === 0) {
-      this.logger.warn(
-        `[ALERT MUTED] Workspace alerts are muted. Skipping recovery email.`,
-      );
-      return;
-    }
-
-    const promises: Promise<any>[] = [];
-    const channelsExecuted: string[] = [];
-
-    const targetEmails = activeUsers.map((e) => e.email);
-    if (targetEmails.length > 0) {
-      channelsExecuted.push(`EMAIL (${targetEmails.length})`);
-      promises.push(
-        this.notificationService.sendRecoveryAlert(targetEmails, payload.url),
-      );
-    }
-
-    const webhookPayload = {
-      event: 'monitor.up',
-      monitorId: payload.monitorId,
-      monitorName: payload.name,
-      url: payload.url,
-      timestamp: now.toISOString(),
-    };
-
-    monitor.tenant.webhooks.forEach((webhook) => {
-      channelsExecuted.push(`WEBHOOK (${webhook.url})`);
-      promises.push(
-        this.webhookService.dispatchWebhook(
-          webhook.url,
-          webhook.secretToken,
-          webhookPayload,
-        ),
-      );
+    await Promise.allSettled(promises);
+    await this.prisma.monitor.update({
+      where: { id: payload.monitorId },
+      data: { lastNotificationAt: null },
     });
-
-    if (monitor.tenant.slackConfig && monitor.tenant.slackConfig.isActive) {
-      channelsExecuted.push(
-        `SLACK (${monitor.tenant.slackConfig.channelName || 'Webhook'})`,
-      );
-      promises.push(
-        this.slackService.sendSlackAlert(
-          monitor.tenant.slackConfig.webhookUrl,
-          'UP',
-          payload.url,
-          'Service has recovered and is now stable.',
-        ),
-      );
-    }
-
-    const results = await Promise.allSettled(promises);
-    let emailSuccess = true;
-
-    results.forEach((res, index) => {
-      if (res.status === 'rejected') {
-        this.logger.error(
-          `Notification Channel [${channelsExecuted[index]}] failed to dispatch recovery alert:`,
-          res.reason,
-        );
-        if (channelsExecuted[index].startsWith('EMAIL')) {
-          emailSuccess = false;
-        }
-      }
-    });
-
-    await this.prisma.$transaction([
-      this.prisma.monitor.update({
-        where: { id: payload.monitorId },
-        data: { lastNotificationaAt: null },
-      }),
-      this.prisma.notificationLog.create({
-        data: {
-          monitorId: payload.monitorId,
-          stateSent: 'UP',
-          sentTo: `Channels: [${channelsExecuted.join(' | ')}]`,
-          success: emailSuccess,
-          errorMessage: emailSuccess
-            ? null
-            : 'Multi-channel recovery dispatch had errors.',
-        },
-      }),
-    ]);
   }
 }
