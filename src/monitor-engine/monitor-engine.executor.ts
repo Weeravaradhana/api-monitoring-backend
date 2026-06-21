@@ -83,6 +83,14 @@ export class MonitorEngineExecutor {
     const userEmails = monitor.tenant.members
       .map((m) => m.user?.email)
       .filter((email): email is string => !!email);
+    await this.saveResultAndUpdateMonitor(
+      monitor,
+      statusCode,
+      responseTime,
+      success,
+      errorMessage,
+      currentState,
+    );
 
     if (previousState !== currentState) {
       this.logger.warn(
@@ -134,12 +142,23 @@ export class MonitorEngineExecutor {
   ) {
     const now = new Date();
     const nextRunAt = new Date(now.getTime() + monitor.interval * 1000);
+
     const lastNotificationAtUpdate = success
       ? null
       : monitor.lastNotificationAt;
 
+    const updateData: Prisma.MonitorUpdateInput = {
+      nextRunAt,
+      lastState: currentState,
+      lastNotificationAt: lastNotificationAtUpdate,
+    };
+
+    if (success) {
+      updateData.lastNotificationAt = null;
+    }
+
     try {
-      await this.prisma.$transaction([
+      const [updatedMonitor] = await this.prisma.$transaction([
         this.prisma.monitoringResult.create({
           data: {
             monitorId: monitor.id,
@@ -152,13 +171,12 @@ export class MonitorEngineExecutor {
         }),
         this.prisma.monitor.update({
           where: { id: monitor.id },
-          data: {
-            nextRunAt,
-            lastState: currentState,
-            lastNotificationAt: lastNotificationAtUpdate,
-          },
+
+          data: updateData,
         }),
       ]);
+
+      return updatedMonitor;
     } catch (dbError) {
       this.logger.error(
         `Failed to save execution results for Monitor ${monitor.id}:`,
