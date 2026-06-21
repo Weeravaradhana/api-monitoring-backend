@@ -76,4 +76,13 @@ export class NotificationConfigService {
       }
     }
   }
+
+  async muteUserAlerts(userId: string, durationInHours: number) {
+    const muteUntil = new Date(Date.now() + durationInHours * 3600000);
+
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { alertsMutedUntil: muteUntil },
+    });
+  }
 }
