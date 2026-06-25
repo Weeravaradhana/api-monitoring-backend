@@ -7,7 +7,6 @@ import {
   Query,
   Req,
   Res,
-  UnauthorizedException,
   UseGuards,
   UsePipes,
   ValidationPipe,
@@ -59,10 +58,6 @@ class AuthController {
   @Get('me')
   @UseGuards(JwtAuthGuard)
   getMe(@GetUser() user: JwtUser) {
-    if (!user) {
-      throw new UnauthorizedException();
-    }
-
     return {
       userId: user.sub,
       tenantId: user.tenantId,
@@ -87,7 +82,7 @@ class AuthController {
     @Req() req: express.Request,
     @GetUser() jwtPayload: jwtPayloadInterface.JwtPayload,
   ) {
-    const accessToken = req.headers.authorization!.split('')[1];
+    const accessToken = req.headers.authorization!.split(' ')[1];
     return this.authService.logout(dto.refreshToken, accessToken, jwtPayload);
   }
 
@@ -117,10 +112,7 @@ class AuthController {
     @GetUser() user: JwtUser,
     @Res({ passthrough: true }) response: express.Response,
   ) {
-    if (!user) {
-      throw new UnauthorizedException();
-    }
-    const accessToken  = await this.authService.switchTenant(
+    const accessToken = await this.authService.switchTenant(
       user.sub,
       dto.tenantId,
     );
