@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  InternalServerErrorException,
   UnauthorizedException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
@@ -16,6 +17,7 @@ import { TokenGenerateDto } from './dto/token-generate.dto';
 import { StringValue } from 'ms';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { JwtPayload } from './interface/jwt-payload.interface';
+import { User } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -32,12 +34,7 @@ export class AuthService {
 
     if (existingUser) {
       if (!existingUser.isVerified) {
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const hashOtp = crypto.createHash('sha256').update(otp).digest('hex');
-
-        const redisKey = `otp:user:${existingUser.id}`;
-        await this.redis.set(redisKey, hashOtp, 'EX', 300);
-
+        const otp = await this.sendOtp(existingUser);
         console.log(
           `[PRODUCTION LOG] OTP for User ${existingUser.email}: ${otp}`,
         );
@@ -53,32 +50,23 @@ export class AuthService {
     const saltRound = 10;
     const hashPassword = await bcrypt.hash(dto.password, saltRound);
 
-    try {
-      const newUser = await this.prisma.user.create({
-        data: {
-          email: dto.email,
-          passwordHash: hashPassword,
-          firstName: dto.firstName,
-          lastName: dto.lastName,
-          role: 'ORGANIZER',
-        },
-      });
+    const newUser = await this.prisma.user.create({
+      data: {
+        email: dto.email,
+        passwordHash: hashPassword,
+        firstName: dto.firstName,
+        lastName: dto.lastName,
+        role: 'ORGANIZER',
+      },
+    });
 
-      const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 💡 Fixed to 6 digits consistency
-      const hashOtp = crypto.createHash('sha256').update(otp).digest('hex');
+    const otp = await this.sendOtp(newUser);
+    console.log(`[PRODUCTION LOG] OTP for User ${newUser.email}: ${otp}`);
 
-      const redisKey = `otp:user:${newUser.id}`;
-      await this.redis.set(redisKey, hashOtp, 'EX', 300);
-
-      console.log(`[PRODUCTION LOG] OTP for User ${newUser.email}: ${otp}`);
-      return {
-        message: 'Registration successful. Please verify your OTP.',
-        userId: newUser.id,
-      };
-    } catch (error) {
-      console.error('Transaction Failed! Rolling back...', error);
-      throw new Error('Registration failed due to a system error.');
-    }
+    return {
+      message: 'Registration successful. Please verify your OTP.',
+      userId: newUser.id,
+    };
   }
   async verifyOtp(dto: VerifyOtpDto) {
     const redisKey = `otp:user:${dto.userId}`;
@@ -129,7 +117,9 @@ export class AuthService {
       });
     } catch (error) {
       console.error('Transaction Failed! Rolling back...', error);
-      throw new Error('Registration failed due to a system error.');
+      throw new InternalServerErrorException(
+        'Registration failed due to a system error.',
+      );
     }
   }
 
@@ -373,5 +363,15 @@ export class AuthService {
     const accessToken = await this.generateToken(tokenData);
 
     return { accessToken };
+  }
+
+  private async sendOtp(user: User) {
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashOtp = crypto.createHash('sha256').update(otp).digest('hex');
+
+    const redisKey = `otp:user:${user.id}`;
+    await this.redis.set(redisKey, hashOtp, 'EX', 300);
+
+    return otp;
   }
 }
