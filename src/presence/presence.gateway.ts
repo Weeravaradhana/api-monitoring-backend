@@ -3,6 +3,7 @@ import {
   WebSocketServer,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  SubscribeMessage,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { PresenceService } from './presence.service';
@@ -33,6 +34,11 @@ class PresenceGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   constructor(private readonly presenceService: PresenceService) {}
 
+  @SubscribeMessage('join')
+  async handleJoin(client: Socket, userId: string) {
+    await client.join(userId);
+  }
+
   async handleConnection(client: AuthenticatedSocket) {
     const { userId, tenantId } = client.handshake.query as PresenceQuery;
 
@@ -41,6 +47,7 @@ class PresenceGateway implements OnGatewayConnection, OnGatewayDisconnect {
     client.data = { userId, tenantId };
 
     await client.join(tenantId);
+    await client.join(userId);
 
     if (!this.onlineUsers.has(tenantId)) {
       this.onlineUsers.set(tenantId, new Map());
