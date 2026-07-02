@@ -7,11 +7,15 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTenantDto } from './dto/create-tenant.dto';
-import { TenantRole } from '@prisma/client';
+import { TenantRole, NotificationType } from '@prisma/client';
+import PresenceGateway from '../presence/presence.gateway';
 
 @Injectable()
 export class TenantService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly presenceGateway: PresenceGateway,
+  ) {}
   private readonly logger = new Logger(TenantService.name);
 
   async createTenantWithMembers(dto: CreateTenantDto, creatorUserId: string) {
@@ -30,11 +34,21 @@ export class TenantService {
       throw new ConflictException('Workspace slug is already taken');
 
     let memberUserIds: string[] = [];
+    let ownerName: string;
     if (dto.memberEmails && dto.memberEmails.length > 0) {
       const users = await this.prisma.user.findMany({
         where: { email: { in: dto.memberEmails } },
-        select: { id: true },
+        select: { id: true, firstName: true },
       });
+
+      for (let i = 0; i < users.length; i++) {
+        if (users[i].id === creatorUserId) {
+          if (users[i].firstName != null) {
+            ownerName = users[i].firstName!;
+          }
+        }
+      }
+
       memberUserIds = users.map((u) => u.id);
     }
 
@@ -44,14 +58,6 @@ export class TenantService {
           data: { name: dto.name, slug: dto.slug },
         });
 
-        await tx.tenantMember.create({
-          data: {
-            tenantId: tenant.id,
-            userId: creatorUserId,
-            role: TenantRole.OWNER,
-          },
-        });
-
         if (memberUserIds.length > 0) {
           const memberData = memberUserIds.map((id) => ({
             tenantId: tenant.id,
@@ -59,8 +65,24 @@ export class TenantService {
             role: TenantRole.MEMBER,
           }));
 
+          const notificationData = memberUserIds.map((id) => ({
+            userId: id,
+            message: `${ownerName} has added you to the tenant ${dto.slug}.`,
+            type: NotificationType.ALERT,
+          }));
+
           await tx.tenantMember.createMany({ data: memberData });
+          await tx.notification.createMany({ data: notificationData });
         }
+
+        memberUserIds.forEach((userId) => {
+          this.presenceGateway.server.to(userId).emit('new_notification', {
+            _id: Date.now().toString(),
+            message: `${ownerName} has added you to the tenant ${dto.slug}.`,
+            isRead: false,
+            createdAt: new Date().toString(),
+          });
+        });
 
         return tenant;
       });
