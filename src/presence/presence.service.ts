@@ -65,6 +65,36 @@ export class PresenceService implements OnModuleInit {
     }
   }
 
+  async getNotificationData(userId: string) {
+    const [notifications, unreadCount] = await Promise.all([
+      this.prisma.notification.findMany({
+        where: {
+          userId: userId,
+          isRead: false,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        take: 30,
+      }),
+      this.prisma.notification.count({
+        where: {
+          userId: userId,
+          isRead: false,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        take: 30,
+      }),
+    ]);
+
+    return {
+      notifications,
+      unreadCount,
+    };
+  }
+
   async getTenantMembers(tenantId: string): Promise<TenantMemberDTO[]> {
     try {
       const members = await this.prisma.tenantMember.findMany({
